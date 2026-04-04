@@ -116,29 +116,30 @@ function init() {
     console.log(`  ✅ ${name}`);
   }
 
-  // Copy statusline script
-  const statuslineSrc = path.join(PACKAGE_ROOT, 'statusline-command.sh');
-  const statuslineDest = path.join(CLAUDE_DIR, 'statusline-command.sh');
-  try {
-    fs.copyFileSync(statuslineSrc, statuslineDest);
-    fs.chmodSync(statuslineDest, 0o755);
+  // Copy statusline script (opt-in via --with-statusline flag)
+  if (process.argv.includes('--with-statusline')) {
+    const statuslineSrc = path.join(PACKAGE_ROOT, 'statusline-command.sh');
+    const statuslineDest = path.join(CLAUDE_DIR, 'statusline-command.sh');
+    try {
+      fs.copyFileSync(statuslineSrc, statuslineDest);
+      fs.chmodSync(statuslineDest, 0o755);
 
-    // Add statusLine config to settings if not already set
-    const currentSettings = readJson(settingsPath) || {};
-    if (!currentSettings.statusLine) {
-      writeJson(settingsPath, {
-        ...currentSettings,
-        statusLine: {
-          type: 'command',
-          command: `bash ${statuslineDest}`,
-        },
-      });
+      const currentSettings = readJson(settingsPath) || {};
+      if (!currentSettings.statusLine) {
+        writeJson(settingsPath, {
+          ...currentSettings,
+          statusLine: {
+            type: 'command',
+            command: `bash ${statuslineDest}`,
+          },
+        });
+      }
+      console.log('\n[Status Line]');
+      console.log(`  ✅ ${statuslineDest}`);
+    } catch {
+      console.log('\n[Status Line]');
+      console.log('  ⏭️  statusline-command.sh not found, skipped');
     }
-    console.log('\n[Status Line]');
-    console.log(`  ✅ ${statuslineDest}`);
-  } catch {
-    console.log('\n[Status Line]');
-    console.log('  ⏭️  statusline-command.sh not found, skipped');
   }
 
   console.log('\n⚠️  Plugins will be auto-installed on next Claude Code session.');
@@ -202,9 +203,10 @@ switch (command) {
 oh-my-claude — Bootstrap and manage your Claude Code environment
 
 Usage:
-  oh-my-claude init            Set up user-level Claude Code settings & skills
-  oh-my-claude project-init    Set up project-level permissions & skills
-  oh-my-claude --help          Show this help message
+  oh-my-claude init                       Set up user-level settings & skills
+  oh-my-claude init --with-statusline     Also install custom status line
+  oh-my-claude project-init               Set up project-level permissions & skills
+  oh-my-claude --help                     Show this help message
 `);
     break;
   default:
