@@ -1,121 +1,67 @@
 ---
 name: doc-structure
-model: haiku
 description: >
-  문서 폴더 구조 및 관리 규칙 상세 참조.
-  트리거: docs 폴더 구조, 파일명 규칙, 문서 관리 방법, 이슈 관리, 타스크 관리, 매뉴얼 관리, 워크트리 진행 관리
-allowed-tools: Read, Glob, Grep
-user-invocable: false
+  프로젝트 문서화 및 문서 최신화. "문서화해"로 소스 분석 후 문서 생성,
+  "문서정리해/문서업데이트/문서최신화"로 변경사항 기반 문서 갱신.
+  commit-push 스킬에서 커밋 직전에 자동 호출되어 문서도 함께 커밋됨.
+  트리거: 문서화해, 문서정리해, 문서업데이트해, 문서최신화해, document, update docs
+allowed-tools: Bash, Read, Write, Edit, Glob, Grep
 ---
 
-## 문서 폴더 구조 및 관리 규칙
+## 문서화 & 문서 최신화
 
-모든 문서는 `/docs` 폴더 아래에서 통합 관리됩니다.
-각 폴더에 폴더명과 동일한 파일로 폴더의 규칙을 관리합니다.
+두 가지 모드로 동작한다.
 
-```
-docs/
-├── specs/                   # 설계 문서
-│   ├── 1-overview.md
-│   ├── 2-tech-stack.md
-│   ├── 3-requirements.md
-│   ├── 4-architecture.md
-│   ├── 5-database.md
-│   ├── 5-1-database-seed.md
-│   ├── 6-api-design.md
-│   └── 7-development-plan.md
-├── ui/
-│   ├── ui.md                # UI관리 지침
-│   └── wireframe-login.md
-├── issues/                  # 이슈 추적
-│   ├── issues.md            # 이슈관리 규칙
-│   ├── issue-{YYYY-MM-DD}-{요약}.md
-│   └── .resolved/           # 해결된 이슈 아카이브 월별로 보관
-├── worktrees/               # 워크트리 관리
-│   ├── .archive             # 워크트리 진행사항 보관
-│   ├── worktrees.md         # 워크트리 관리 규칙
-│   ├── worktree-main.md     # 메인 워크트리 진행 상황
-│   ├── worktree-second.md   # 두번째 워크트리 진행 상황
-│   └── worktree-third.md    # 세번째 워크트리 진행 상황
-├── manuals/                 # 사용자 매뉴얼
-│   ├── manuals.md           # 매뉴얼 관리 지침
-│   ├── user-manual.md       # 점주용 매뉴얼
-│   ├── alba-manual.md       # 직원용 매뉴얼
-│   ├── admin-manual.md      # 관리자용 매뉴얼
-│   └── assets/              # 향후 스크린샷/이미지
-├── decisions.md             # 핵심 기술 결정사항
-└── tasks/                   # 작업 관리
-    ├── tasks.md             # 작업 관리 규칙
-    ├── todos.md             # 기능 개선 TODO 목록
-    ├── future.md            # 향후 확장 계획
-    ├── task-{YYYY-MM-DD}-{요약}.md       # 개별 작업
-    └── .completed/          # 완료된 작업 아카이브 월별로 보관
-```
+---
 
-### `/docs/specs` - 설계 문서
-**용도:** 프로젝트의 요구사항, 아키텍처, 설계 등 고정 개발 문서
+### 모드 1: 문서화해
 
-**관리 규칙:**
-- 파일명: `{번호}-{주제}.md` (예: `1-overview.md`)
-- 내용: 프로젝트 설계, 요구사항, API 설계 등 참고 자료
-- 수정: 설계 변경 시만 수정 (변경 이력 기록)
+소스를 분석하여 `docs/` 폴더에 문서를 생성한다.
 
-### `/docs/issues` - 이슈 현황
-**용도:** 발견된 버그, 개선사항, 문제 사항 기록
+1. **프로젝트 구조 파악**: 디렉토리 구조, package.json, 주요 설정 파일 확인
+2. **기존 문서 확인**: `docs/`가 있으면 읽고, 없으면 `mkdir -p docs`
+3. **문서 생성/갱신**:
+   - `docs/architecture.md` — 프로젝트 구조, 기술 스택, 주요 모듈
+   - `docs/api.md` — API 엔드포인트 (백엔드가 있으면)
+   - `docs/setup.md` — 설치 및 실행 방법
+   - 프로젝트에 맞게 필요한 문서만 생성 (빈 문서 만들지 않음)
+4. **결과 보고**: 생성/수정된 문서 목록 출력
 
-**관리 규칙:**
-- 파일명: `{YYYY-MM-DD}-{요약}.md`
-- **해결된 이슈:** `/docs/issues/.resolved/` 폴더로 이동
-- **미해결 이슈:** `/docs/issues/` 루트에 유지
+---
 
-### `/docs/decisions.md` - 결정사항
-**용도:** 프로젝트의 핵심 기술 선택 및 아키텍처 결정사항 기록
+### 모드 2: 문서정리해 / 문서업데이트 / 문서최신화
 
-**관리 규칙:**
-- 꼭 기억해야 할 확정된 결정사항만 보관
-- 불필요한 이력이나 진행 상태 구분 없이 단일 파일로 관리
-- 새로운 결정사항은 해당 섹션에 추가
+변경된 코드를 기반으로 기존 문서를 갱신한다.
 
-### `/docs/worktrees/` - 워크트리별 진행 현황
-**용도:** 각 워크트리에서 진행 중인 작업의 상세 기록 (Git 커밋, 모든 워크트리에서 공유)
+1. **변경사항 파악**:
+   ```bash
+   git diff --name-only HEAD
+   git diff --name-only --cached
+   ```
+2. **기존 문서 읽기**: `docs/` 하위 문서들을 읽음
+3. **영향 분석**: 변경된 파일이 문서의 어떤 부분에 영향을 주는지 판단
+   - API 변경 → `api.md` 갱신
+   - 의존성 추가/제거 → `setup.md` 갱신
+   - 구조 변경 → `architecture.md` 갱신
+   - 영향 없으면 "문서 갱신 불필요" 출력 후 종료
+4. **문서 수정**: 해당 부분만 최소한으로 수정
+5. **결과 보고**: 수정된 문서와 변경 내용 요약
 
-**관리 규칙:**
-- `worktrees.md` — 관리 규칙
-- `worktree-main.md` / `worktree-second.md` / `worktree-third.md` — 각 워크트리 진행 상황
-- **각 워크트리는 자신의 progress 파일만 수정한다**
-- 작업 시작/완료 등 진행 상태가 변경될 때마다 먼저 업데이트하고 작업을 수행
-- 브랜치 전환/생성/머지 시 업데이트
+---
 
-### `/docs/manuals/` - 사용자 매뉴얼
-**용도:** 역할별 사용자 매뉴얼 관리
+### commit-push 연동
 
-**관리 규칙:**
-- 관리 지침: `docs/manuals/manuals.md` 참조
-- 파일명: `{대상}-manual.md` (예: `user-manual.md`, `alba-manual.md`)
-- 신규 작성 시: `/cs-make-manual` 커맨드 활용
-- 기능 변경 시: 관련 매뉴얼도 함께 업데이트
+이 스킬은 `/commit-push` 스킬에서 커밋 직전에 자동 호출된다.
+`commit-push`에서 호출될 때는 **모드 2 (문서 갱신)**로 동작하며,
+수정된 문서 파일은 커밋에 함께 포함된다.
 
-### `/docs/tasks/` - 작업 관리
-**용도:** 앞으로 진행할 작업 목록 관리
+호출 조건: `docs/` 폴더가 존재하는 프로젝트에서만.
 
-**관리 규칙:**
-- `task-{YYYY-MM-DD}-{요약}.md` 파일로 개별 관리
-- 완료 시: `.completed/` 폴더로 이동
-- 우선순위: `🔴 높음` `🟡 중간` `🟢 낮음`
+---
 
-### 디렉토리 네비게이션
-```
-keep-the-money/
-├── backend/              → NestJS 백엔드 소스
-├── frontend/             → React 프론트엔드 소스
-├── docs/                 → 모든 문서 통합
-│   ├── specs/            → 설계 문서
-│   ├── ui/               → UI 관리 지침
-│   ├── issues/           → 이슈 추적
-│   ├── worktrees/        → 워크트리별 진행 현황
-│   ├── tasks/            → 작업 관리
-│   └── decisions.md      → 핵심 기술 결정사항
-├── CLAUDE.md             → 프로젝트 진입점
-├── docker-compose.yml    → 개발 환경 설정
-└── deploy.sh             → 배포 스크립트
-```
+### 주의사항
+
+- 기존 문서의 스타일과 언어를 유지한다
+- 문서가 없는 프로젝트에서 "문서정리해"는 "먼저 '문서화해'를 실행하세요"로 안내
+- README.md는 건드리지 않는다 (사용자 영역)
+- 과도한 문서 생성 금지 — 실제 유용한 문서만
