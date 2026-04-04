@@ -2,13 +2,14 @@
 
 'use strict';
 
-const { runInit, runProjectInit, runClone, runBackup, runRestore, runStatus, runDoctor, runUpdate, runSessions, runResume } = require('./installer');
+const { runInit, runProjectInit, runClone, runBackup, runRestore, runStatus, runDoctor, runUpdate, runSessions, runResume, runInstall } = require('./installer');
 const { renderBanner, C, style } = require('./ui');
 
 // --- Parse args ---
 const args = process.argv.slice(2);
 const flags = new Set(args.filter(a => a.startsWith('-') && !a.includes('=')));
 const command = args.find(a => !a.startsWith('-')) || (flags.has('--version') ? '--version' : flags.has('-h') || flags.has('--help') ? '--help' : undefined);
+const subcommand = args.filter(a => !a.startsWith('-'))[1]; // second positional arg
 const getFlag = (name) => {
   const val = args.find(a => a.startsWith(`--${name}=`));
   return val ? val.split('=')[1] : null;
@@ -39,9 +40,17 @@ function showHelp() {
   console.log(`  ${style('Usage:', b)} omc <command> [options]\n`);
 
   console.log(`  ${style('Setup', b)}`);
-  console.log(`    ${style('init', c)}              Interactive environment setup`);
-  console.log(`      ${style('--yes, -y', g)}       Skip prompts, install everything (default settings)`);
+  console.log(`    ${style('init', c)}              Interactive environment setup (all-in-one)`);
+  console.log(`      ${style('--yes, -y', g)}       Skip prompts, install everything`);
   console.log(`      ${style('--lang=ko', g)}       Set skill language (en|ko, default: auto-detect)`);
+  console.log(`    ${style('install', c)} <target>  Install a specific component`);
+  console.log(`      ${style('skills', g)}          Install user skills only`);
+  console.log(`      ${style('plugins', g)}         Apply plugins to settings.json`);
+  console.log(`      ${style('permissions', g)}     Apply permissions to settings.json`);
+  console.log(`      ${style('statusline', g)}      Install status line script`);
+  console.log(`      ${style('all', g)}             Install everything (= init -y)`);
+  console.log(`      ${style('--lang=ko', g)}       Skill language (for install skills)`);
+  console.log(`      ${style('--force, -f', g)}     Overwrite without asking`);
   console.log(`    ${style('project-init', c)}      Set up project-level permissions`);
   console.log(`      ${style('--force, -f', g)}     Overwrite without backup`);
   console.log(`    ${style('update', c)}            Check & apply updates from repo`);
@@ -49,26 +58,26 @@ function showHelp() {
   console.log(`      ${style('--force, -f', g)}     Force update even if up to date\n`);
 
   console.log(`  ${style('Sessions', b)}`);
-  console.log(`    ${style('sessions', c)}          List recent sessions across all projects`);
-  console.log(`      ${style('--project=<name>', g)} Filter by project name`);
-  console.log(`      ${style('--all, -a', g)}       Show all projects (default: current project only)`);
-  console.log(`      ${style('--limit=<n>', g)}     Number of sessions to show (default: 10)`);
-  console.log(`    ${style('resume', c)} [id]       Resume a session (interactive picker if no id)`);
-  console.log(`      ${style('--fork', g)}          Fork session instead of continuing in-place\n`);
+  console.log(`    ${style('sessions', c)}          List recent sessions across projects`);
+  console.log(`      ${style('--all, -a', g)}       All projects (default: current only)`);
+  console.log(`      ${style('--project=<name>', g)} Filter by project`);
+  console.log(`      ${style('--limit=<n>', g)}     Number to show (default: 10)`);
+  console.log(`    ${style('resume', c)} [id]       Resume a session (picker if no id)`);
+  console.log(`      ${style('--fork', g)}          Fork as new session\n`);
 
   console.log(`  ${style('Info', b)}`);
   console.log(`    ${style('status', c)}            Show current environment summary`);
   console.log(`      ${style('--json', g)}          Output as JSON`);
   console.log(`    ${style('doctor', c)}            Diagnose configuration issues`);
-  console.log(`      ${style('--verbose, -v', g)}   Show all checks (not just issues)\n`);
+  console.log(`      ${style('--verbose, -v', g)}   Show all checks\n`);
 
   console.log(`  ${style('Environment', b)}`);
   console.log(`    ${style('clone', c)}             Export ~/.claude/ as portable package`);
-  console.log(`      ${style('--output=<dir>', g)}  Output directory (default: ./claude-env-{timestamp})`);
+  console.log(`      ${style('--output=<dir>', g)}  Output directory`);
   console.log(`    ${style('backup', c)}            Snapshot ~/.claude/ to .tar.gz`);
   console.log(`      ${style('--output=<file>', g)} Output file path`);
   console.log(`    ${style('restore', c)} <file>    Restore from backup`);
-  console.log(`      ${style('--force, -f', g)}     Restore without backup of current settings\n`);
+  console.log(`      ${style('--force, -f', g)}     Skip backup of current settings\n`);
 
   console.log(`  ${style('Global Options', b)}`);
   console.log(`    ${style('--help, -h', c)}        Show this help message`);
@@ -88,15 +97,16 @@ function showVersion() {
 
 switch (command) {
   case 'init':         runInit(opts); break;
+  case 'install':      runInstall(subcommand, opts); break;
   case 'project-init': runProjectInit(opts); break;
   case 'clone':        runClone(opts); break;
   case 'backup':       runBackup(opts); break;
-  case 'restore':      runRestore(args.find(a => !a.startsWith('-') && a !== 'restore'), opts); break;
+  case 'restore':      runRestore(subcommand, opts); break;
   case 'status':       runStatus(opts); break;
   case 'doctor':       runDoctor(opts); break;
   case 'update':       runUpdate(opts); break;
   case 'sessions':     runSessions(opts); break;
-  case 'resume':       runResume(args.find(a => !a.startsWith('-') && a !== 'resume'), opts); break;
+  case 'resume':       runResume(subcommand, opts); break;
   case '--version':    showVersion(); break;
   case '--help': case '-h': case undefined:
     showHelp(); break;

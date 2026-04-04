@@ -326,6 +326,86 @@ async function runInit(opts = {}) {
   renderDone();
 }
 
+// --- Install: individual components ---
+
+async function runInstall(target, opts = {}) {
+  renderBanner();
+
+  const settingsPath = path.join(CLAUDE_DIR, 'settings.json');
+  const preset = loadPreset('user.json');
+
+  const sysLocale = (process.env.LANG || process.env.LC_ALL || process.env.LANGUAGE || 'en').toLowerCase();
+  const lang = opts.lang || (sysLocale.startsWith('ko') ? 'ko' : 'en');
+
+  switch (target) {
+    case 'skills': {
+      console.log(`  ${style('Installing skills...', C.bold)}\n`);
+      const result = await installSkills(opts.force, lang);
+      console.log(`\n  ${style('✓', C.green)} ${style(result.detail, C.bold)}\n`);
+      break;
+    }
+
+    case 'plugins': {
+      console.log(`  ${style('Applying plugins...', C.bold)}\n`);
+      if (!opts.force) {
+        const bakPath = backup(settingsPath);
+        if (bakPath) console.log(`  ${style('💾', C.gray)} ${style('Backup: ' + bakPath, C.gray)}`);
+      }
+      const existing = readJson(settingsPath) || {};
+      existing.enabledPlugins = preset.enabledPlugins;
+      existing.extraKnownMarketplaces = preset.extraKnownMarketplaces;
+      writeJson(settingsPath, existing);
+      const count = Object.keys(preset.enabledPlugins || {}).length;
+      console.log(`  ${style('✓', C.green)} ${count} plugins enabled`);
+      console.log(`\n  ${style('⚠️  Plugins will be auto-installed on next session.', C.yellow)}\n`);
+      break;
+    }
+
+    case 'permissions': {
+      console.log(`  ${style('Applying permissions...', C.bold)}\n`);
+      if (!opts.force) {
+        const bakPath = backup(settingsPath);
+        if (bakPath) console.log(`  ${style('💾', C.gray)} ${style('Backup: ' + bakPath, C.gray)}`);
+      }
+      const existing = readJson(settingsPath) || {};
+      existing.permissions = preset.permissions;
+      writeJson(settingsPath, existing);
+      const allow = preset.permissions.allow?.length || 0;
+      const deny = preset.permissions.deny?.length || 0;
+      console.log(`  ${style('✓', C.green)} ${allow} allow, ${deny} deny\n`);
+      break;
+    }
+
+    case 'statusline': {
+      console.log(`  ${style('Installing status line...', C.bold)}\n`);
+      const statuslineSrc = path.join(PACKAGE_ROOT, 'statusline-command.sh');
+      const statuslineDest = path.join(CLAUDE_DIR, 'statusline-command.sh');
+      if (!fs.existsSync(statuslineSrc)) {
+        console.error(`  ${style('ERROR:', C.red)} statusline-command.sh not found in package\n`);
+        break;
+      }
+      fs.copyFileSync(statuslineSrc, statuslineDest);
+      fs.chmodSync(statuslineDest, 0o755);
+      const existing = readJson(settingsPath) || {};
+      if (!existing.statusLine) {
+        existing.statusLine = { type: 'command', command: `bash ${statuslineDest}` };
+        writeJson(settingsPath, existing);
+      }
+      console.log(`  ${style('✓', C.green)} ${statuslineDest}\n`);
+      break;
+    }
+
+    case 'all': {
+      return runInit({ ...opts, yes: true });
+    }
+
+    default:
+      console.error(`  ${style('Unknown target:', C.red)} ${target || '(none)'}`);
+      console.error(`\n  Available targets: ${style('skills', C.cyan)}, ${style('plugins', C.cyan)}, ${style('permissions', C.cyan)}, ${style('statusline', C.cyan)}, ${style('all', C.cyan)}\n`);
+      process.exit(1);
+  }
+}
+
 // --- Main: project-init ---
 
 function runProjectInit(opts = {}) {
@@ -1059,4 +1139,4 @@ async function runResume(sessionId, opts = {}) {
   }
 }
 
-module.exports = { runInit, runProjectInit, runClone, runBackup, runRestore, runStatus, runDoctor, runUpdate, runSessions, runResume };
+module.exports = { runInit, runProjectInit, runInstall, runClone, runBackup, runRestore, runStatus, runDoctor, runUpdate, runSessions, runResume };
