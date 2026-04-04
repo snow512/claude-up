@@ -27,13 +27,11 @@ function writeJson(filePath, data) {
 
 function copyDirRecursive(src, dest) {
   fs.mkdirSync(dest, { recursive: true });
-
   let count = 0;
   for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
     if (entry.isSymbolicLink()) continue;
     const srcPath = path.join(src, entry.name);
     const destPath = path.join(dest, entry.name);
-
     if (entry.isDirectory()) {
       count += copyDirRecursive(srcPath, destPath);
     } else {
@@ -78,22 +76,79 @@ function ask(question) {
   });
 }
 
-function copySkills(src, dest) {
-  const copied = [];
-  try {
-    for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
-      if (!entry.isDirectory()) continue;
-      copyDirRecursive(path.join(src, entry.name), path.join(dest, entry.name));
-      copied.push(entry.name);
+// Interactive checkbox selector with arrow keys
+function checkbox(items) {
+  return new Promise((resolve) => {
+    const selected = items.map(() => true); // all selected by default
+    let cursor = 0;
+
+    function render() {
+      // Move cursor up to overwrite previous render
+      if (cursor >= 0) process.stdout.write(`\x1b[${items.length + 1}A`);
+
+      console.log('  (↑↓ move, space toggle, a all, n none, enter confirm)\n');
+      for (let i = 0; i < items.length; i++) {
+        const check = selected[i] ? '◉' : '○';
+        const arrow = i === cursor ? '›' : ' ';
+        const dim = selected[i] ? '' : '\x1b[2m';
+        const reset = '\x1b[0m';
+        console.log(`  ${arrow} ${check} ${dim}${items[i].name} — ${items[i].desc}${reset}`);
+      }
     }
-  } catch {
-    // src directory doesn't exist — no skills to copy
-  }
-  return copied;
+
+    // Initial render
+    console.log('  (↑↓ move, space toggle, a all, n none, enter confirm)\n');
+    for (let i = 0; i < items.length; i++) {
+      const check = selected[i] ? '◉' : '○';
+      const arrow = i === cursor ? '›' : ' ';
+      console.log(`  ${arrow} ${check} ${items[i].name} — ${items[i].desc}`);
+    }
+
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+    process.stdin.setEncoding('utf-8');
+
+    process.stdin.on('data', (key) => {
+      if (key === '\r' || key === '\n') {
+        // Enter — confirm
+        process.stdin.setRawMode(false);
+        process.stdin.pause();
+        process.stdin.removeAllListeners('data');
+        console.log('');
+        resolve(items.filter((_, i) => selected[i]).map(item => item.name));
+        return;
+      }
+      if (key === ' ') {
+        selected[cursor] = !selected[cursor];
+        render();
+      } else if (key === 'a') {
+        selected.fill(true);
+        render();
+      } else if (key === 'n') {
+        selected.fill(false);
+        render();
+      } else if (key === '\x1b[A' || key === 'k') {
+        // Up
+        cursor = (cursor - 1 + items.length) % items.length;
+        render();
+      } else if (key === '\x1b[B' || key === 'j') {
+        // Down
+        cursor = (cursor + 1) % items.length;
+        render();
+      } else if (key === '\x03') {
+        // Ctrl+C
+        process.exit(0);
+      }
+    });
+  });
 }
 
 async function init() {
   console.log('oh-my-claude init\n');
+
+  // Ask: use defaults?
+  const useDefaults = await ask('Use default settings? (install everything) [Y/n] ');
+  const isDefault = useDefaults === '' || useDefaults === 'y' || useDefaults === 'yes';
 
   const settingsPath = path.join(CLAUDE_DIR, 'settings.json');
   const preset = loadPreset(path.join(PACKAGE_ROOT, 'presets', 'user.json'));
@@ -117,10 +172,9 @@ async function init() {
   console.log(`  ✅ enabledPlugins: ${pluginCount}`);
   console.log(`  ✅ marketplaces: ${Object.keys(preset.extraKnownMarketplaces || {}).join(', ')}`);
 
-  // User skills — ask which to install
+  // Skills
   const skillsSrc = path.join(PACKAGE_ROOT, 'user-skills');
   const skillsDest = path.join(CLAUDE_DIR, 'skills');
-  const copiedSkills = [];
 
   try {
     const available = fs.readdirSync(skillsSrc, { withFileTypes: true })
@@ -131,61 +185,46 @@ async function init() {
         try {
           const content = fs.readFileSync(skillFile, 'utf-8');
           const match = content.match(/description:\s*>?\s*\n?\s*(.+)/);
-          if (match) desc = match[1].trim().slice(0, 60);
+          if (match) desc = match[1].trim().slice(0, 50);
         } catch {}
-        return { name: e.name, desc };
+        return { name: e.name, desc: desc || '(no description)' };
       });
 
-    console.log(`\n[User Skills] (${available.length} available)`);
-    for (const { name, desc } of available) {
-      console.log(`  ${name} — ${desc || '(no description)'}`);
+    let selectedSkills;
+    if (isDefault) {
+      selectedSkills = available.map(s => s.name);
+      console.log(`\n[User Skills] ✅ All ${available.length} skills installed`);
+    } else {
+      console.log(`\n[User Skills] Select skills to install:\n`);
+      selectedSkills = await checkbox(available);
+      console.log(`  ✅ ${selectedSkills.length}/${available.length} skills installed`);
     }
 
-    const answer = await ask('\nInstall all skills? (y/n) ');
-    const installAll = answer === 'y' || answer === 'yes';
-
-    if (installAll) {
-      for (const { name } of available) {
-        copyDirRecursive(path.join(skillsSrc, name), path.join(skillsDest, name));
-        copiedSkills.push(name);
-      }
-      console.log(`  ✅ All ${available.length} skills installed`);
-    } else {
-      for (const { name, desc } of available) {
-        const a = await ask(`  Install "${name}"? (y/n) `);
-        if (a === 'y' || a === 'yes') {
-          copyDirRecursive(path.join(skillsSrc, name), path.join(skillsDest, name));
-          copiedSkills.push(name);
-          console.log(`    ✅ installed`);
-        } else {
-          console.log(`    ⏭️  skipped`);
-        }
-      }
+    for (const name of selectedSkills) {
+      copyDirRecursive(path.join(skillsSrc, name), path.join(skillsDest, name));
     }
   } catch {
     // user-skills directory doesn't exist
   }
 
-  // Status line — ask user
+  // Status line
   const statuslineSrc = path.join(PACKAGE_ROOT, 'statusline-command.sh');
   const statuslineDest = path.join(CLAUDE_DIR, 'statusline-command.sh');
 
   if (fs.existsSync(statuslineSrc)) {
-    const alreadyExists = fs.existsSync(statuslineDest);
-    let install = false;
-
-    if (!alreadyExists) {
-      const answer = await ask('\nInstall custom status line? (y/n) ');
-      install = answer === 'y' || answer === 'yes';
-    } else {
-      const answer = await ask('\nStatus line already exists. Overwrite? (y/n) ');
+    let install = isDefault;
+    if (!isDefault) {
+      const alreadyExists = fs.existsSync(statuslineDest);
+      const q = alreadyExists
+        ? '\nStatus line already exists. Overwrite? (y/n) '
+        : '\nInstall custom status line? (y/n) ';
+      const answer = await ask(q);
       install = answer === 'y' || answer === 'yes';
     }
 
     if (install) {
       fs.copyFileSync(statuslineSrc, statuslineDest);
       fs.chmodSync(statuslineDest, 0o755);
-
       const currentSettings = readJson(settingsPath) || {};
       if (!currentSettings.statusLine) {
         writeJson(settingsPath, {
@@ -196,9 +235,9 @@ async function init() {
           },
         });
       }
-      console.log(`  ✅ Status line installed: ${statuslineDest}`);
+      console.log('\n[Status Line] ✅ installed');
     } else {
-      console.log('  ⏭️  Status line skipped');
+      console.log('\n[Status Line] ⏭️  skipped');
     }
   }
 
@@ -232,10 +271,16 @@ function projectInit() {
   console.log('[Permissions]');
   console.log(`  ✅ allow: ${preset.permissions.allow.join(', ')}`);
 
-  const copiedSkills = copySkills(
-    path.join(PACKAGE_ROOT, 'project-skills'),
-    path.join(claudeDir, 'skills'),
-  );
+  const copiedSkills = [];
+  const skillsSrc = path.join(PACKAGE_ROOT, 'project-skills');
+  const skillsDest = path.join(claudeDir, 'skills');
+  try {
+    for (const entry of fs.readdirSync(skillsSrc, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      copyDirRecursive(path.join(skillsSrc, entry.name), path.join(skillsDest, entry.name));
+      copiedSkills.push(entry.name);
+    }
+  } catch {}
 
   if (copiedSkills.length > 0) {
     console.log(`\n[Project Skills] (${copiedSkills.length})`);
