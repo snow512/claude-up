@@ -703,12 +703,84 @@ function runDoctor() {
   }
 }
 
-// --- Update: pull latest skills from repo ---
+// --- Update: check everything for changes ---
 
 async function runUpdate() {
   renderBanner();
+  console.log(`  ${style('Checking for updates...', C.bold)}\n`);
 
-  // Detect current language from existing skill (check if SKILL.md contains Korean)
+  const settingsPath = path.join(CLAUDE_DIR, 'settings.json');
+  const settings = readJson(settingsPath) || {};
+  const preset = loadPreset('user.json');
+
+  // --- 1. Permissions ---
+  const presetAllow = JSON.stringify(preset.permissions.allow || []);
+  const localAllow = JSON.stringify(settings.permissions?.allow || []);
+  const presetDeny = JSON.stringify(preset.permissions.deny || []);
+  const localDeny = JSON.stringify(settings.permissions?.deny || []);
+
+  if (presetAllow !== localAllow || presetDeny !== localDeny) {
+    console.log(`  ${style('!', C.yellow)} Permissions changed in preset`);
+    const doUpdate = await ask('Update permissions?', true);
+    if (doUpdate) {
+      settings.permissions = preset.permissions;
+      writeJson(settingsPath, settings);
+      console.log(`  ${style('✓', C.green)} Permissions updated\n`);
+    } else {
+      console.log(`  ${style('⏭', C.gray)}  Permissions skipped\n`);
+    }
+  } else {
+    console.log(`  ${style('–', C.gray)} Permissions (up to date)`);
+  }
+
+  // --- 2. Plugins ---
+  const presetPlugins = JSON.stringify(Object.keys(preset.enabledPlugins || {}).sort());
+  const localPlugins = JSON.stringify(Object.keys(settings.enabledPlugins || {}).sort());
+
+  if (presetPlugins !== localPlugins) {
+    const presetList = Object.keys(preset.enabledPlugins || {});
+    const localList = Object.keys(settings.enabledPlugins || {});
+    const added = presetList.filter(p => !localList.includes(p));
+    const removed = localList.filter(p => !presetList.includes(p));
+
+    if (added.length > 0) console.log(`  ${style('+', C.green)} New plugins: ${added.map(p => p.replace(/@.*$/, '')).join(', ')}`);
+    if (removed.length > 0) console.log(`  ${style('-', C.red)} Removed from preset: ${removed.map(p => p.replace(/@.*$/, '')).join(', ')}`);
+
+    const doUpdate = await ask('Update plugins?', true);
+    if (doUpdate) {
+      settings.enabledPlugins = preset.enabledPlugins;
+      writeJson(settingsPath, settings);
+      console.log(`  ${style('✓', C.green)} Plugins updated\n`);
+    } else {
+      console.log(`  ${style('⏭', C.gray)}  Plugins skipped\n`);
+    }
+  } else {
+    console.log(`  ${style('–', C.gray)} Plugins (up to date)`);
+  }
+
+  // --- 3. Statusline ---
+  const statuslineSrc = path.join(PACKAGE_ROOT, 'statusline-command.sh');
+  const statuslineDest = path.join(CLAUDE_DIR, 'statusline-command.sh');
+
+  if (fs.existsSync(statuslineSrc) && fs.existsSync(statuslineDest)) {
+    const srcContent = fs.readFileSync(statuslineSrc);
+    const destContent = fs.readFileSync(statuslineDest);
+    if (!srcContent.equals(destContent)) {
+      console.log(`  ${style('!', C.yellow)} Status line changed in repo`);
+      const doUpdate = await ask('Update status line?', true);
+      if (doUpdate) {
+        fs.copyFileSync(statuslineSrc, statuslineDest);
+        console.log(`  ${style('✓', C.green)} Status line updated\n`);
+      } else {
+        console.log(`  ${style('⏭', C.gray)}  Status line skipped\n`);
+      }
+    } else {
+      console.log(`  ${style('–', C.gray)} Status line (up to date)`);
+    }
+  }
+
+  // --- 4. Skills ---
+  // Detect current language
   let lang = 'en';
   const skillsDest = path.join(CLAUDE_DIR, 'skills');
   try {
@@ -719,11 +791,10 @@ async function runUpdate() {
     }
   } catch {}
 
-  console.log(`  ${style(`Updating skills from repo (${lang})...`, C.bold)}\n`);
+  console.log(`\n  ${style(`Skills (${lang}):`, C.bold)}`);
 
   const skillsSrc = path.join(PACKAGE_ROOT, 'user-skills');
 
-  // Get repo skills
   const repoSkills = new Set();
   try {
     for (const entry of fs.readdirSync(skillsSrc, { withFileTypes: true })) {
@@ -734,7 +805,6 @@ async function runUpdate() {
     return;
   }
 
-  // Get local skills
   const localSkills = new Set();
   try {
     for (const entry of fs.readdirSync(skillsDest, { withFileTypes: true })) {
@@ -742,66 +812,81 @@ async function runUpdate() {
     }
   } catch {}
 
-  // Compare and update only changed skills
-  let updated = 0;
-  let added = 0;
-  let skipped = 0;
+  // Collect changes first
+  const newSkills = [];
+  const changedSkills = [];
+  const upToDate = [];
+  const removedSkills = [];
 
   for (const name of repoSkills) {
-    const srcDir = path.join(skillsSrc, name);
-    const destDir = path.join(skillsDest, name);
-
     if (!localSkills.has(name)) {
-      await progressLine(`Adding ${name} (new)`, () => {
-        copySkillWithLang(srcDir, destDir, lang);
-      });
-      added++;
-      continue;
-    }
-
-    // Check if any file differs
-    const changed = isDirChanged(srcDir, destDir);
-    if (changed) {
-      await progressLine(`Updating ${name}`, () => {
-        copySkillWithLang(srcDir, destDir, lang);
-      });
-      updated++;
+      newSkills.push(name);
+    } else if (isDirChanged(path.join(skillsSrc, name), path.join(skillsDest, name))) {
+      changedSkills.push(name);
     } else {
-      console.log(`  ${style('–', C.gray)} ${style(name, C.gray)} (up to date)`);
-      skipped++;
+      upToDate.push(name);
     }
   }
-
-  // Detect removed skills (in local but not in repo)
-  const removed = [];
   for (const name of localSkills) {
-    if (!repoSkills.has(name)) {
-      removed.push(name);
-    }
+    if (!repoSkills.has(name)) removedSkills.push(name);
   }
 
-  if (removed.length > 0) {
-    console.log(`\n  ${style('Skills not in repo (local only):', C.yellow)}`);
-    for (const name of removed) {
-      console.log(`    ${style('•', C.yellow)} ${name}`);
-    }
-    const shouldDelete = await ask('Remove these local-only skills?', false);
-    if (shouldDelete) {
-      for (const name of removed) {
-        const skillPath = path.join(skillsDest, name);
-        fs.rmSync(skillPath, { recursive: true });
-        console.log(`  ${style('✗', C.red)} Removed ${name}`);
+  // Show status
+  for (const name of upToDate) {
+    console.log(`  ${style('–', C.gray)} ${style(name, C.gray)} (up to date)`);
+  }
+  for (const name of changedSkills) {
+    console.log(`  ${style('!', C.yellow)} ${name} (changed)`);
+  }
+  for (const name of newSkills) {
+    console.log(`  ${style('+', C.green)} ${name} (new)`);
+  }
+  for (const name of removedSkills) {
+    console.log(`  ${style('?', C.yellow)} ${name} (local only, not in repo)`);
+  }
+
+  // Update changed skills — ask
+  if (changedSkills.length > 0) {
+    const doUpdate = await ask(`Update ${changedSkills.length} changed skill(s)?`, true);
+    if (doUpdate) {
+      for (const name of changedSkills) {
+        copySkillWithLang(path.join(skillsSrc, name), path.join(skillsDest, name), lang);
+        console.log(`  ${style('✓', C.green)} ${name} updated`);
       }
     } else {
-      console.log(`  ${style('⏭', C.gray)}  Kept local-only skills`);
+      console.log(`  ${style('⏭', C.gray)}  Changed skills skipped`);
     }
   }
 
-  const parts = [];
-  if (updated > 0) parts.push(`${updated} updated`);
-  if (added > 0) parts.push(`${added} added`);
-  if (skipped > 0) parts.push(`${skipped} up to date`);
-  console.log(`\n  ${style('✓', C.green)} ${style(parts.join(', '), C.bold)}\n`);
+  // Add new skills — ask
+  if (newSkills.length > 0) {
+    const doAdd = await ask(`Install ${newSkills.length} new skill(s)?`, true);
+    if (doAdd) {
+      for (const name of newSkills) {
+        copySkillWithLang(path.join(skillsSrc, name), path.join(skillsDest, name), lang);
+        console.log(`  ${style('✓', C.green)} ${name} added`);
+      }
+    } else {
+      console.log(`  ${style('⏭', C.gray)}  New skills skipped`);
+    }
+  }
+
+  // Remove local-only skills — ask
+  if (removedSkills.length > 0) {
+    const doRemove = await ask(`Remove ${removedSkills.length} local-only skill(s)?`, false);
+    if (doRemove) {
+      for (const name of removedSkills) {
+        fs.rmSync(path.join(skillsDest, name), { recursive: true });
+        console.log(`  ${style('✗', C.red)} ${name} removed`);
+      }
+    } else {
+      console.log(`  ${style('⏭', C.gray)}  Local-only skills kept`);
+    }
+  }
+
+  // Summary
+  const total = changedSkills.length + newSkills.length + upToDate.length;
+  console.log(`\n  ${style('✓', C.green)} ${style('Update check complete', C.bold)}\n`);
 }
 
 module.exports = { runInit, runProjectInit, runClone, runBackup, runRestore, runStatus, runDoctor, runUpdate };
