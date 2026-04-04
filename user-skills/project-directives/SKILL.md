@@ -1,34 +1,13 @@
 ---
 name: project-directives
 description: >
-  프로젝트 관리 매직 커맨드 — 프로젝트 최신화, 코드 보강/개선, 브랜치 싱크.
-  트리거: 프로젝트 최신화해, 보강해, 개선해, 싱크해, sync
+  프로젝트 관리 매직 커맨드 — 코드 보강/개선, 브랜치 싱크.
+  트리거: 보강해, 개선해, 싱크해, sync
 allowed-tools: Bash, Read, Glob, Grep, Edit, Write
 user-invocable: false
 ---
 
 ## 매직 커맨드
-
----
-
-### "프로젝트 최신화해"
-
-소스와 의존성을 최신 상태로 맞춘다.
-
-```bash
-# 소스 최신화
-git pull -p
-
-# 의존성 설치 (프로젝트 유형에 맞게)
-```
-
-| 프로젝트 유형 | 명령 |
-|---|---|
-| Node.js (루트) | `npm install` |
-| 풀스택 (분리형) | 각 서브디렉토리에서 `npm install` |
-| Python | `pip install -r requirements.txt` 또는 `poetry install` |
-| Go | `go mod download` |
-| Docker | `docker compose pull` |
 
 ---
 
