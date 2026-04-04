@@ -74,17 +74,21 @@ allowed-tools: Bash, Read
 
 1. **안전 검사**: 미커밋 변경 있으면 → `/commit-push` 호출
 
-2. **리모트 푸시**: 현재 브랜치를 리모트에 푸시
+2. **버전 & CHANGELOG**: `version-release` 스킬 호출
+   - 버전 올림 + CHANGELOG.md 갱신
+   - 변경분을 커밋에 포함
+
+3. **리모트 푸시**: 현재 브랜치를 리모트에 푸시
    ```bash
    git push -u origin <브랜치명>
    ```
 
-3. **PR 생성**:
+4. **PR 생성**:
    ```bash
    gh pr create --base <대상> --title "<제목>" --body "<본문>"
    ```
    - 제목: 브랜치명과 커밋 로그 기반으로 자동 생성
-   - 본문: 주요 변경사항 요약
+   - 본문: CHANGELOG의 최신 버전 섹션 내용 포함
 
 4. **결과 보고**:
    ```
