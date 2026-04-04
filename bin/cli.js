@@ -2,7 +2,7 @@
 
 'use strict';
 
-const { runInit, runProjectInit, runClone, runBackup, runRestore } = require('./installer');
+const { runInit, runProjectInit, runClone, runBackup, runRestore, runStatus, runDoctor, runUpdate } = require('./installer');
 const { renderBanner, C, style } = require('./ui');
 
 const command = process.argv[2];
@@ -10,7 +10,6 @@ const command = process.argv[2];
 function showHelp() {
   renderBanner();
 
-  const g = C.gray;
   const c = C.cyan;
   const b = C.bold;
 
@@ -18,7 +17,12 @@ function showHelp() {
 
   console.log(`  ${style('Setup', b)}`);
   console.log(`    ${style('init', c)}              Interactive environment setup (settings, skills, plugins)`);
-  console.log(`    ${style('project-init', c)}      Set up project-level permissions & skills\n`);
+  console.log(`    ${style('project-init', c)}      Set up project-level permissions & skills`);
+  console.log(`    ${style('update', c)}            Pull latest skills from repo (without full init)\n`);
+
+  console.log(`  ${style('Info', b)}`);
+  console.log(`    ${style('status', c)}            Show current environment summary`);
+  console.log(`    ${style('doctor', c)}            Diagnose configuration issues\n`);
 
   console.log(`  ${style('Environment', b)}`);
   console.log(`    ${style('clone', c)}             Export current ~/.claude/ as portable package`);
@@ -28,30 +32,20 @@ function showHelp() {
   console.log(`  ${style('Options', b)}`);
   console.log(`    ${style('--help, -h', c)}        Show this help message\n`);
 
-  console.log(`  ${style('Alias:', g)} oh-my-claude = omc\n`);
+  console.log(`  ${style('Alias:', C.gray)} oh-my-claude = omc\n`);
 }
 
 switch (command) {
-  case 'init':
-    runInit();
-    break;
-  case 'project-init':
-    runProjectInit();
-    break;
-  case 'clone':
-    runClone();
-    break;
-  case 'backup':
-    runBackup();
-    break;
-  case 'restore':
-    runRestore(process.argv[3]);
-    break;
-  case '--help':
-  case '-h':
-  case undefined:
-    showHelp();
-    break;
+  case 'init':        runInit(); break;
+  case 'project-init': runProjectInit(); break;
+  case 'clone':       runClone(); break;
+  case 'backup':      runBackup(); break;
+  case 'restore':     runRestore(process.argv[3]); break;
+  case 'status':      runStatus(); break;
+  case 'doctor':      runDoctor(); break;
+  case 'update':      runUpdate(); break;
+  case '--help': case '-h': case undefined:
+    showHelp(); break;
   default:
     console.error(`\n  ${style('Unknown command:', C.red)} ${command}`);
     console.error(`  Run ${style('omc --help', C.cyan)} for usage\n`);

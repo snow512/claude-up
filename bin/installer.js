@@ -461,4 +461,259 @@ async function runRestore(source) {
   }
 }
 
-module.exports = { runInit, runProjectInit, runClone, runBackup, runRestore };
+// --- Status: show current environment ---
+
+function runStatus() {
+  renderBanner();
+  console.log(`  ${style('Environment Status', C.bold)}\n`);
+
+  // Settings
+  const settingsPath = path.join(CLAUDE_DIR, 'settings.json');
+  const settings = readJson(settingsPath);
+
+  if (settings) {
+    const allow = settings.permissions?.allow?.length || 0;
+    const deny = settings.permissions?.deny?.length || 0;
+    const plugins = Object.keys(settings.enabledPlugins || {}).length;
+    const hasStatusLine = !!settings.statusLine;
+
+    console.log(`  ${style('Settings', C.bold)} ${style(settingsPath, C.gray)}`);
+    console.log(`    Permissions: ${style(`${allow} allow`, C.green)}, ${style(`${deny} deny`, C.red)}`);
+    console.log(`    Plugins:     ${style(`${plugins} enabled`, C.cyan)}`);
+    console.log(`    Status line: ${hasStatusLine ? style('configured', C.green) : style('not set', C.gray)}`);
+  } else {
+    console.log(`  ${style('Settings', C.bold)} ${style('not found', C.red)}`);
+  }
+
+  // Skills
+  const skillsDir = path.join(CLAUDE_DIR, 'skills');
+  let skillNames = [];
+  try {
+    skillNames = fs.readdirSync(skillsDir, { withFileTypes: true })
+      .filter(e => e.isDirectory())
+      .map(e => e.name);
+  } catch {}
+
+  console.log(`\n  ${style('User Skills', C.bold)} ${style(`(${skillNames.length})`, C.gray)}`);
+  if (skillNames.length > 0) {
+    for (const name of skillNames.sort()) {
+      console.log(`    ${style('•', C.cyan)} ${name}`);
+    }
+  } else {
+    console.log(`    ${style('(none)', C.gray)}`);
+  }
+
+  // Plugins detail
+  if (settings?.enabledPlugins) {
+    const pluginNames = Object.keys(settings.enabledPlugins);
+    console.log(`\n  ${style('Plugins', C.bold)} ${style(`(${pluginNames.length})`, C.gray)}`);
+    for (const name of pluginNames.sort()) {
+      const short = name.replace(/@.*$/, '');
+      console.log(`    ${style('•', C.cyan)} ${short}`);
+    }
+  }
+
+  // Status line
+  const statuslinePath = path.join(CLAUDE_DIR, 'statusline-command.sh');
+  console.log(`\n  ${style('Status Line', C.bold)}`);
+  if (fs.existsSync(statuslinePath)) {
+    console.log(`    ${style('✓', C.green)} ${statuslinePath}`);
+  } else {
+    console.log(`    ${style('✗', C.gray)} not installed`);
+  }
+
+  console.log('');
+}
+
+// --- Doctor: diagnose issues ---
+
+function runDoctor() {
+  renderBanner();
+  console.log(`  ${style('Checking configuration...', C.bold)}\n`);
+
+  let issues = 0;
+  let warnings = 0;
+
+  function ok(msg) { console.log(`  ${style('✓', C.green)} ${msg}`); }
+  function warn(msg) { console.log(`  ${style('!', C.yellow)} ${msg}`); warnings++; }
+  function fail(msg) { console.log(`  ${style('✗', C.red)} ${msg}`); issues++; }
+
+  // 1. ~/.claude/ directory
+  if (fs.existsSync(CLAUDE_DIR)) {
+    ok('~/.claude/ directory exists');
+  } else {
+    fail('~/.claude/ directory not found — run "omc init"');
+    console.log(`\n  ${style(`${issues} issues`, C.red)}\n`);
+    return;
+  }
+
+  // 2. settings.json
+  const settingsPath = path.join(CLAUDE_DIR, 'settings.json');
+  const settings = readJson(settingsPath);
+  if (settings) {
+    ok('settings.json is valid JSON');
+  } else if (fs.existsSync(settingsPath)) {
+    fail('settings.json exists but is invalid JSON');
+  } else {
+    fail('settings.json not found — run "omc init"');
+  }
+
+  // 3. Permissions
+  if (settings?.permissions?.allow?.length > 0) {
+    ok(`permissions.allow: ${settings.permissions.allow.length} rules`);
+  } else {
+    warn('No allow permissions configured');
+  }
+
+  if (settings?.permissions?.deny?.length > 0) {
+    ok(`permissions.deny: ${settings.permissions.deny.length} rules`);
+  } else {
+    warn('No deny permissions configured — destructive commands not blocked');
+  }
+
+  // 4. Plugins
+  if (settings?.enabledPlugins && Object.keys(settings.enabledPlugins).length > 0) {
+    ok(`${Object.keys(settings.enabledPlugins).length} plugins enabled`);
+  } else {
+    warn('No plugins enabled');
+  }
+
+  // 5. Marketplaces
+  if (settings?.extraKnownMarketplaces) {
+    ok('Marketplace configured');
+  } else {
+    warn('No marketplace configured — plugins may not auto-install');
+  }
+
+  // 6. Skills directory
+  const skillsDir = path.join(CLAUDE_DIR, 'skills');
+  if (fs.existsSync(skillsDir)) {
+    const skills = fs.readdirSync(skillsDir, { withFileTypes: true }).filter(e => e.isDirectory());
+    if (skills.length > 0) {
+      ok(`${skills.length} user skills installed`);
+
+      // Check each skill has SKILL.md
+      let broken = 0;
+      for (const s of skills) {
+        if (!fs.existsSync(path.join(skillsDir, s.name, 'SKILL.md'))) {
+          fail(`Skill "${s.name}" missing SKILL.md`);
+          broken++;
+        }
+      }
+      if (broken === 0) ok('All skills have valid SKILL.md');
+    } else {
+      warn('Skills directory is empty');
+    }
+  } else {
+    warn('No skills directory — run "omc init"');
+  }
+
+  // 7. Status line
+  const statuslinePath = path.join(CLAUDE_DIR, 'statusline-command.sh');
+  if (fs.existsSync(statuslinePath)) {
+    const stat = fs.statSync(statuslinePath);
+    if (stat.mode & 0o111) {
+      ok('statusline-command.sh is executable');
+    } else {
+      warn('statusline-command.sh exists but is not executable');
+    }
+    if (settings?.statusLine) {
+      ok('statusLine configured in settings.json');
+    } else {
+      warn('statusline-command.sh exists but statusLine not configured in settings.json');
+    }
+  }
+
+  // 8. Backup files
+  try {
+    const backups = fs.readdirSync(CLAUDE_DIR).filter(f => f.includes('.bak.'));
+    if (backups.length > 5) {
+      warn(`${backups.length} backup files in ~/.claude/ — consider cleaning up`);
+    }
+  } catch {}
+
+  // Summary
+  console.log('');
+  if (issues === 0 && warnings === 0) {
+    console.log(`  ${style('All checks passed!', C.green, C.bold)}\n`);
+  } else {
+    if (issues > 0) console.log(`  ${style(`${issues} issue(s)`, C.red, C.bold)}`);
+    if (warnings > 0) console.log(`  ${style(`${warnings} warning(s)`, C.yellow, C.bold)}`);
+    console.log('');
+  }
+}
+
+// --- Update: pull latest skills from repo ---
+
+async function runUpdate() {
+  renderBanner();
+  console.log(`  ${style('Updating skills from repo...', C.bold)}\n`);
+
+  const skillsSrc = path.join(PACKAGE_ROOT, 'user-skills');
+  const skillsDest = path.join(CLAUDE_DIR, 'skills');
+
+  // Get repo skills
+  const repoSkills = new Set();
+  try {
+    for (const entry of fs.readdirSync(skillsSrc, { withFileTypes: true })) {
+      if (entry.isDirectory()) repoSkills.add(entry.name);
+    }
+  } catch {
+    console.error(`  ${style('ERROR:', C.red)} user-skills/ not found\n`);
+    return;
+  }
+
+  // Get local skills
+  const localSkills = new Set();
+  try {
+    for (const entry of fs.readdirSync(skillsDest, { withFileTypes: true })) {
+      if (entry.isDirectory()) localSkills.add(entry.name);
+    }
+  } catch {}
+
+  // Update existing + add new
+  let updated = 0;
+  let added = 0;
+  for (const name of repoSkills) {
+    if (localSkills.has(name)) {
+      await progressLine(`Updating ${name}`, () => {
+        copyDirRecursive(path.join(skillsSrc, name), path.join(skillsDest, name));
+      });
+      updated++;
+    } else {
+      await progressLine(`Adding ${name} (new)`, () => {
+        copyDirRecursive(path.join(skillsSrc, name), path.join(skillsDest, name));
+      });
+      added++;
+    }
+  }
+
+  // Detect removed skills (in local but not in repo)
+  const removed = [];
+  for (const name of localSkills) {
+    if (!repoSkills.has(name)) {
+      removed.push(name);
+    }
+  }
+
+  if (removed.length > 0) {
+    console.log(`\n  ${style('Skills not in repo (local only):', C.yellow)}`);
+    for (const name of removed) {
+      console.log(`    ${style('•', C.yellow)} ${name}`);
+    }
+    const shouldDelete = await ask('Remove these local-only skills?', false);
+    if (shouldDelete) {
+      for (const name of removed) {
+        const skillPath = path.join(skillsDest, name);
+        fs.rmSync(skillPath, { recursive: true });
+        console.log(`  ${style('✗', C.red)} Removed ${name}`);
+      }
+    } else {
+      console.log(`  ${style('⏭', C.gray)}  Kept local-only skills`);
+    }
+  }
+
+  console.log(`\n  ${style('✓', C.green)} ${style(`Updated: ${updated}, Added: ${added}`, C.bold)}\n`);
+}
+
+module.exports = { runInit, runProjectInit, runClone, runBackup, runRestore, runStatus, runDoctor, runUpdate };
