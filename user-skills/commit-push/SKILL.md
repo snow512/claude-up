@@ -35,7 +35,15 @@ git log --oneline -5
 ### 2단계: 프로젝트 감지 & 린터 실행
 
 변경된 파일 중 소스 코드 파일이 있으면 해당 프로젝트의 린터를 실행한다.
-린터 설정이 없는 프로젝트는 이 단계를 건너뛴다.
+
+**린터 설정이 없는 경우:**
+먼저 `.claude/settings.local.json`의 `skills.commit-push.linterDeclined`를 확인한다.
+이전에 거부한 적이 있으면 다시 묻지 않고 건너뛴다.
+
+처음이라면 설치 여부를 물어본다. 동의하면 설치 후 실행, 거부하면 `settings.local.json`에 기록:
+```json
+{ "skills": { "commit-push": { "linterDeclined": true } } }
+```
 
 **감지 방법:**
 

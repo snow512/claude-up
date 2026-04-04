@@ -83,16 +83,24 @@ git ls-files --others --exclude-standard
 프로젝트의 린터 설정을 확인하고 실행한다.
 
 **린터 설정이 없는 경우:**
-TS/JS 프로젝트인데 ESLint 설정이 없으면 사용자에게 설치 여부를 물어본다.
-> "이 프로젝트에 ESLint 설정이 없습니다. 설치할까요? (프로젝트에 맞는 기본 설정으로 세팅합니다)"
+
+먼저 `.claude/settings.local.json`의 `skills.clean-code.linterDeclined`를 확인한다.
+이전에 거부한 적이 있으면 다시 묻지 않고 린터 단계를 건너뛴다.
+
+처음이라면 사용자에게 설치 여부를 물어본다:
+> "이 프로젝트에 린터 설정이 없습니다. 설치할까요? (프로젝트에 맞는 기본 설정으로 세팅합니다)"
 
 사용자가 동의하면:
-- `npm init @eslint/config@latest` 실행 (또는 프로젝트에 맞는 설정 생성)
+- JS/TS: `npm init @eslint/config@latest` 실행
+- Python: `pip install ruff` + `ruff.toml` 생성
 - 설치 후 린터를 실행
 
-사용자가 거부하면 린터 단계를 건너뛴다.
-
-Python 프로젝트도 마찬가지 — ruff/flake8 설정이 없으면 ruff 설치를 제안한다.
+사용자가 거부하면:
+- `.claude/settings.local.json`에 기록하여 다시 묻지 않음:
+  ```json
+  { "skills": { "clean-code": { "linterDeclined": true } } }
+  ```
+- 린터 단계를 건너뛴다
 
 **풀스택 프로젝트 처리:**
 frontend와 backend에 각각 린터가 있으면 독립적으로 실행한다.
