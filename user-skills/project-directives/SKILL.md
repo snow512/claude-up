@@ -1,8 +1,8 @@
 ---
 name: project-directives
 description: >
-  프로젝트 관리 매직 커맨드 — 코드 보강/개선, 브랜치 싱크.
-  트리거: 보강해, 개선해, 싱크해, sync
+  프로젝트 관리 매직 커맨드 — 코드 보강/개선.
+  트리거: 보강해, 개선해
 allowed-tools: Bash, Read, Glob, Grep, Edit, Write
 user-invocable: false
 ---
@@ -34,26 +34,3 @@ user-invocable: false
 
 "개선해"는 코드 레벨이 아닌 **사용자 경험 레벨**의 개선 — UI 흐름, 에러 메시지, 편의 기능 등.
 
----
-
-### "싱크해" / "{브랜치}에 싱크해"
-
-현재 브랜치와 대상 브랜치를 양방향 머지로 동기화한다.
-
-1. 미커밋 변경 있으면 → `/commit-push` 호출
-2. 대상 브랜치를 현재 브랜치에 머지 (대상의 변경을 가져옴)
-   ```bash
-   git fetch origin
-   git merge origin/<대상> --no-edit
-   ```
-3. 현재 브랜치를 대상에 머지 (내 변경을 보냄)
-   ```bash
-   git checkout <대상>
-   git pull origin <대상>
-   git merge <원래브랜치> --no-edit
-   git push origin <대상>
-   git checkout <원래브랜치>
-   ```
-4. 충돌 시 사용자에게 보고
-
-대상 미지정 시 `develop` 또는 `dev` 브랜치를 자동 감지.
