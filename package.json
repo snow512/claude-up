@@ -12,7 +12,8 @@
     "project-skills/",
     "plugin.json",
     "skills/",
-    "commands/"
+    "commands/",
+    "statusline-command.sh"
   ],
   "keywords": [
     "claude",
