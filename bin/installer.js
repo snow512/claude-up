@@ -894,4 +894,169 @@ async function runUpdate(opts = {}) {
   console.log(`\n  ${style('✓', C.green)} ${style('Update check complete', C.bold)}\n`);
 }
 
-module.exports = { runInit, runProjectInit, runClone, runBackup, runRestore, runStatus, runDoctor, runUpdate };
+// --- Sessions: list sessions across projects ---
+
+function getSessionList(opts = {}) {
+  const projectsDir = path.join(CLAUDE_DIR, 'projects');
+  if (!fs.existsSync(projectsDir)) return [];
+
+  const projects = fs.readdirSync(projectsDir, { withFileTypes: true })
+    .filter(e => e.isDirectory());
+
+  // Filter by current project or --project flag
+  let cwd;
+  try { cwd = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf-8' }).trim(); }
+  catch { cwd = process.cwd(); }
+  const cwdEncoded = cwd.replace(/\//g, '-');
+
+  const sessions = [];
+
+  for (const proj of projects) {
+    const projPath = path.join(projectsDir, proj.name);
+    // Decode project path: -home-user-Workspace-my-project → my-project
+    const projName = proj.name.replace(/^-home-[^-]+-(Workspace-|Garage-)?/, '').replace(/^-/, '') || proj.name;
+
+    // Filter logic
+    if (opts.project) {
+      if (!projName.toLowerCase().includes(opts.project.toLowerCase())) continue;
+    } else if (!opts.all) {
+      if (!proj.name.includes(cwdEncoded.slice(1))) continue;
+    }
+
+    // Find jsonl session files
+    let files;
+    try { files = fs.readdirSync(projPath).filter(f => f.endsWith('.jsonl')); }
+    catch { continue; }
+
+    for (const file of files) {
+      const filePath = path.join(projPath, file);
+      const sessionId = file.replace('.jsonl', '');
+
+      try {
+        const stat = fs.statSync(filePath);
+        // Read first few lines to get first real user message
+        const fd = fs.openSync(filePath, 'r');
+        const buf = Buffer.alloc(4000);
+        fs.readSync(fd, buf, 0, 4000, 0);
+        fs.closeSync(fd);
+        const lines = buf.toString('utf-8').split('\n');
+
+        let firstMessage = '';
+        for (const line of lines) {
+          try {
+            const obj = JSON.parse(line);
+            if (obj.type === 'user' && obj.message?.content) {
+              const content = typeof obj.message.content === 'string'
+                ? obj.message.content
+                : JSON.stringify(obj.message.content);
+              // Skip system-generated messages
+              if (content.startsWith('<local-command-caveat>') || content.startsWith('<command-')) continue;
+              // Strip HTML tags and truncate
+              firstMessage = content.replace(/<[^>]+>/g, '').trim().slice(0, 80);
+              break;
+            }
+          } catch {}
+        }
+
+        sessions.push({
+          id: sessionId,
+          project: projName,
+          date: stat.mtime,
+          size: stat.size,
+          firstMessage: firstMessage || '(empty)',
+        });
+      } catch {}
+    }
+  }
+
+  // Sort by date, newest first
+  sessions.sort((a, b) => b.date - a.date);
+  return sessions.slice(0, opts.limit || 10);
+}
+
+function runSessions(opts = {}) {
+  renderBanner();
+
+  const sessions = getSessionList(opts);
+
+  if (sessions.length === 0) {
+    console.log(`  ${style('No sessions found.', C.gray)}\n`);
+    return;
+  }
+
+  const scope = opts.all ? 'all projects' : opts.project || 'current project';
+  console.log(`  ${style(`Recent sessions (${scope}):`, C.bold)}\n`);
+
+  for (const s of sessions) {
+    const date = s.date.toISOString().slice(0, 16).replace('T', ' ');
+    const sizeStr = s.size > 1048576 ? `${(s.size / 1048576).toFixed(1)}MB` : `${(s.size / 1024).toFixed(0)}KB`;
+    const proj = style(s.project, C.cyan);
+    const id = style(s.id.slice(0, 8), C.gray);
+    const msg = s.firstMessage.length > 60 ? s.firstMessage.slice(0, 60) + '...' : s.firstMessage;
+
+    console.log(`  ${style(date, C.gray)}  ${id}  ${proj}`);
+    console.log(`    ${style(msg, C.dim)}  ${style(sizeStr, C.gray)}`);
+  }
+
+  console.log(`\n  ${style('Resume with:', C.gray)} ${style('omc resume <session-id>', C.cyan)}`);
+  console.log(`  ${style('Or just:', C.gray)} ${style('omc resume', C.cyan)} ${style('(interactive picker)', C.gray)}\n`);
+}
+
+// --- Resume: resume a session ---
+
+async function runResume(sessionId, opts = {}) {
+  const { execFileSync: execSync } = require('child_process');
+
+  if (!sessionId) {
+    // Interactive: list and pick
+    const sessions = getSessionList({ ...opts, all: true, limit: 20 });
+    if (sessions.length === 0) {
+      console.error(`  ${style('No sessions found.', C.red)}\n`);
+      return;
+    }
+
+    const items = sessions.map(s => {
+      const date = s.date.toISOString().slice(0, 10);
+      const msg = s.firstMessage.slice(0, 40);
+      return { name: s.id, desc: `${date} ${s.project} — ${msg}` };
+    });
+
+    renderBanner();
+    console.log(`  ${style('Select a session to resume:', C.bold)}\n`);
+    const { checkbox } = require('./ui');
+    // Use checkbox but only allow single selection behavior
+    const selected = await checkbox(items);
+    if (!selected || selected.length === 0) return;
+    sessionId = selected[0];
+  }
+
+  // Expand short ID to full UUID
+  if (sessionId.length < 36) {
+    const sessions = getSessionList({ all: true, limit: 100 });
+    const match = sessions.find(s => s.id.startsWith(sessionId));
+    if (match) {
+      sessionId = match.id;
+    } else {
+      console.error(`  ${style('Session not found:', C.red)} ${sessionId}\n`);
+      return;
+    }
+  }
+
+  console.log(`\n  ${style('Resuming session:', C.bold)} ${style(sessionId.slice(0, 8) + '...', C.cyan)}`);
+  if (opts.fork) console.log(`  ${style('(forked — new session ID)', C.gray)}`);
+  console.log('');
+
+  // Build args
+  const claudeArgs = ['--resume', sessionId];
+  if (opts.fork) claudeArgs.push('--fork-session');
+
+  // Exec claude (replaces this process)
+  try {
+    const { execFileSync } = require('child_process');
+    execFileSync('claude', claudeArgs, { stdio: 'inherit' });
+  } catch (err) {
+    if (err.status) process.exit(err.status);
+  }
+}
+
+module.exports = { runInit, runProjectInit, runClone, runBackup, runRestore, runStatus, runDoctor, runUpdate, runSessions, runResume };

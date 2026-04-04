@@ -2,7 +2,7 @@
 
 'use strict';
 
-const { runInit, runProjectInit, runClone, runBackup, runRestore, runStatus, runDoctor, runUpdate } = require('./installer');
+const { runInit, runProjectInit, runClone, runBackup, runRestore, runStatus, runDoctor, runUpdate, runSessions, runResume } = require('./installer');
 const { renderBanner, C, style } = require('./ui');
 
 // --- Parse args ---
@@ -19,8 +19,12 @@ const opts = {
   yes:     flags.has('--yes') || flags.has('-y'),
   json:    flags.has('--json'),
   verbose: flags.has('--verbose') || flags.has('-v'),
-  lang:    getFlag('lang'),                          // --lang=ko
-  output:  getFlag('output') || getFlag('out'),      // --output=./my-backup
+  fork:    flags.has('--fork'),
+  all:     flags.has('--all') || flags.has('-a'),
+  lang:    getFlag('lang'),
+  output:  getFlag('output') || getFlag('out'),
+  project: getFlag('project'),
+  limit:   parseInt(getFlag('limit') || '10', 10),
 };
 
 // --- Help ---
@@ -43,6 +47,14 @@ function showHelp() {
   console.log(`    ${style('update', c)}            Check & apply updates from repo`);
   console.log(`      ${style('--yes, -y', g)}       Apply all updates without asking`);
   console.log(`      ${style('--force, -f', g)}     Force update even if up to date\n`);
+
+  console.log(`  ${style('Sessions', b)}`);
+  console.log(`    ${style('sessions', c)}          List recent sessions across all projects`);
+  console.log(`      ${style('--project=<name>', g)} Filter by project name`);
+  console.log(`      ${style('--all, -a', g)}       Show all projects (default: current project only)`);
+  console.log(`      ${style('--limit=<n>', g)}     Number of sessions to show (default: 10)`);
+  console.log(`    ${style('resume', c)} [id]       Resume a session (interactive picker if no id)`);
+  console.log(`      ${style('--fork', g)}          Fork session instead of continuing in-place\n`);
 
   console.log(`  ${style('Info', b)}`);
   console.log(`    ${style('status', c)}            Show current environment summary`);
@@ -83,6 +95,8 @@ switch (command) {
   case 'status':       runStatus(opts); break;
   case 'doctor':       runDoctor(opts); break;
   case 'update':       runUpdate(opts); break;
+  case 'sessions':     runSessions(opts); break;
+  case 'resume':       runResume(args.find(a => !a.startsWith('-') && a !== 'resume'), opts); break;
   case '--version':    showVersion(); break;
   case '--help': case '-h': case undefined:
     showHelp(); break;
