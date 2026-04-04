@@ -34,7 +34,8 @@ function copyDirRecursive(src, dest) {
   for (const entry of fs.readdirSync(src)) {
     const srcPath = path.join(src, entry);
     const destPath = path.join(dest, entry);
-    const stat = fs.statSync(srcPath);
+    const stat = fs.lstatSync(srcPath);
+    if (stat.isSymbolicLink()) continue;
 
     if (stat.isDirectory()) {
       count += copyDirRecursive(srcPath, destPath);
@@ -69,6 +70,10 @@ function init() {
     console.error('ERROR: presets/user.json not found');
     process.exit(1);
   }
+  if (!preset.permissions) {
+    console.error('ERROR: preset file is missing or has no permissions key');
+    process.exit(1);
+  }
 
   // 2. Backup existing settings
   const bakPath = backup(settingsPath);
@@ -98,6 +103,7 @@ function init() {
   if (fs.existsSync(skillsSrc)) {
     for (const dir of fs.readdirSync(skillsSrc)) {
       const srcDir = path.join(skillsSrc, dir);
+      if (dir === '.gitkeep') continue;
       if (!fs.statSync(srcDir).isDirectory()) continue;
       const destDir = path.join(skillsDest, dir);
       copyDirRecursive(srcDir, destDir);
@@ -137,6 +143,10 @@ function projectInit() {
   const preset = readJson(presetPath);
   if (!preset) {
     console.error('ERROR: presets/project.json not found');
+    process.exit(1);
+  }
+  if (!preset.permissions) {
+    console.error('ERROR: preset file is missing or has no permissions key');
     process.exit(1);
   }
 
