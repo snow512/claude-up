@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
-const { renderBanner, renderStep, progressLine, ask, checkbox, renderSummary, renderDone } = require('./ui');
+const { renderBanner, renderStep, progressLine, ask, checkbox, renderSummary, renderDone, C, style } = require('./ui');
 
 const CLAUDE_DIR = path.join(require('os').homedir(), '.claude');
 const PACKAGE_ROOT = path.resolve(__dirname, '..');
@@ -72,44 +72,61 @@ function getAvailableSkills() {
   } catch { return []; }
 }
 
-// --- Step 1: Settings ---
+// --- Step 1: Permissions (allow) ---
 
-async function applySettings(settingsPath, useDefaults) {
-  const preset = loadPreset('user.json');
-  const bakPath = backup(settingsPath);
+async function configureAllow(preset, useDefaults) {
+  const allAllow = preset.permissions.allow || [];
 
-  const existing = readJson(settingsPath) || {};
-  const merged = {
-    ...existing,
-    permissions: preset.permissions,
-    enabledPlugins: preset.enabledPlugins,
-    extraKnownMarketplaces: preset.extraKnownMarketplaces,
-  };
-
-  const allowCount = preset.permissions.allow?.length || 0;
-  const denyCount = preset.permissions.deny?.length || 0;
-  const pluginCount = Object.keys(preset.enabledPlugins || {}).length;
-
-  await progressLine(`Applying permissions (${allowCount} allow, ${denyCount} deny)`, () => {
-    writeJson(settingsPath, merged);
-  });
-
-  await progressLine(`Enabling plugins (${pluginCount})`, () => {});
-  await progressLine('Configuring marketplaces', () => {});
-
-  if (bakPath) {
-    const { C, style } = require('./ui');
-    console.log(`  ${style('💾', C.gray)} ${style('Backup: ' + bakPath, C.gray)}`);
+  if (useDefaults) {
+    await progressLine(`Applying ${allAllow.length} allow rules`, () => {});
+    return allAllow;
   }
 
-  return {
-    ok: true,
-    label: 'Settings',
-    detail: `${allowCount} allow, ${denyCount} deny, ${pluginCount} plugins`,
-  };
+  console.log('');
+  const items = allAllow.map(r => ({ name: r, desc: '' }));
+  const selected = await checkbox(items);
+  console.log(`  ${style('✓', C.green)} ${selected.length}/${allAllow.length} allow rules selected`);
+  return selected;
 }
 
-// --- Step 2: User Skills ---
+// --- Step 2: Permissions (deny) ---
+
+async function configureDeny(preset, useDefaults) {
+  const allDeny = preset.permissions.deny || [];
+
+  if (useDefaults) {
+    await progressLine(`Applying ${allDeny.length} deny rules`, () => {});
+    return allDeny;
+  }
+
+  console.log('');
+  const items = allDeny.map(r => ({ name: r, desc: '' }));
+  const selected = await checkbox(items);
+  console.log(`  ${style('✓', C.green)} ${selected.length}/${allDeny.length} deny rules selected`);
+  return selected;
+}
+
+// --- Step 3: Plugins ---
+
+async function configurePlugins(preset, useDefaults) {
+  const allPlugins = Object.keys(preset.enabledPlugins || {});
+
+  if (useDefaults) {
+    await progressLine(`Enabling ${allPlugins.length} plugins`, () => {});
+    return allPlugins;
+  }
+
+  console.log('');
+  const items = allPlugins.map(p => {
+    const name = p.replace(/@.*$/, '');
+    return { name: p, desc: name };
+  });
+  const selected = await checkbox(items);
+  console.log(`  ${style('✓', C.green)} ${selected.length}/${allPlugins.length} plugins selected`);
+  return selected;
+}
+
+// --- Step 4: User Skills ---
 
 async function installSkills(useDefaults) {
   const skillsSrc = path.join(PACKAGE_ROOT, 'user-skills');
@@ -117,7 +134,7 @@ async function installSkills(useDefaults) {
   const available = getAvailableSkills();
 
   if (available.length === 0) {
-    return { ok: false, label: 'Skills', detail: 'no skills found' };
+    return { ok: false, label: 'Skills', detail: 'no skills found', selected: [] };
   }
 
   let selectedNames;
@@ -135,17 +152,18 @@ async function installSkills(useDefaults) {
     for (const name of selectedNames) {
       copyDirRecursive(path.join(skillsSrc, name), path.join(skillsDest, name));
     }
-    console.log(`  ${require('./ui').style('✓', require('./ui').C.green)} ${selectedNames.length} skills installed`);
+    console.log(`  ${style('✓', C.green)} ${selectedNames.length} skills installed`);
   }
 
   return {
     ok: true,
     label: 'Skills',
     detail: `${selectedNames.length}/${available.length} installed`,
+    selected: selectedNames,
   };
 }
 
-// --- Step 3: Status Line ---
+// --- Step 5: Status Line ---
 
 async function installStatusLine(settingsPath, useDefaults) {
   const statuslineSrc = path.join(PACKAGE_ROOT, 'statusline-command.sh');
@@ -191,31 +209,65 @@ async function runInit() {
   renderBanner();
 
   const useDefaults = await ask('Use defaults? (install everything)', true);
+  const totalSteps = 6;
 
-  // Step 1
-  renderStep(1, 4, 'Settings');
   const settingsPath = path.join(CLAUDE_DIR, 'settings.json');
-  const settingsResult = await applySettings(settingsPath, useDefaults);
+  const preset = loadPreset('user.json');
+  const bakPath = backup(settingsPath);
 
-  // Step 2
-  renderStep(2, 4, 'User Skills');
+  if (bakPath) {
+    console.log(`\n  ${style('💾', C.gray)} ${style('Backup: ' + bakPath, C.gray)}`);
+  }
+
+  // Step 1: Allow permissions
+  renderStep(1, totalSteps, 'Permissions (allow)');
+  const selectedAllow = await configureAllow(preset, useDefaults);
+
+  // Step 2: Deny permissions
+  renderStep(2, totalSteps, 'Permissions (deny)');
+  const selectedDeny = await configureDeny(preset, useDefaults);
+
+  // Step 3: Plugins
+  renderStep(3, totalSteps, 'Plugins');
+  const selectedPlugins = await configurePlugins(preset, useDefaults);
+
+  // Write settings
+  const existing = readJson(settingsPath) || {};
+  const enabledPlugins = {};
+  for (const p of selectedPlugins) { enabledPlugins[p] = true; }
+
+  writeJson(settingsPath, {
+    ...existing,
+    permissions: { allow: selectedAllow, deny: selectedDeny },
+    enabledPlugins,
+    extraKnownMarketplaces: preset.extraKnownMarketplaces,
+  });
+
+  await progressLine('Configuring marketplaces', () => {});
+
+  // Step 4: Skills
+  renderStep(4, totalSteps, 'User Skills');
   const skillsResult = await installSkills(useDefaults);
 
-  // Step 3
-  renderStep(3, 4, 'Status Line');
+  // Step 5: Status Line
+  renderStep(5, totalSteps, 'Status Line');
   const statusResult = await installStatusLine(settingsPath, useDefaults);
 
-  // Step 4
-  renderStep(4, 4, 'Summary');
-  renderSummary([settingsResult, skillsResult, statusResult]);
+  // Step 6: Summary
+  renderStep(6, totalSteps, 'Summary');
+  renderSummary([
+    { ok: true, label: 'Allow rules', detail: `${selectedAllow.length} configured` },
+    { ok: true, label: 'Deny rules', detail: `${selectedDeny.length} configured` },
+    { ok: true, label: 'Plugins', detail: `${selectedPlugins.length} enabled` },
+    { ok: skillsResult.ok, label: skillsResult.label, detail: skillsResult.detail },
+    { ok: statusResult.ok, label: statusResult.label, detail: statusResult.detail },
+  ]);
   renderDone();
 }
 
 // --- Main: project-init ---
 
 function runProjectInit() {
-  const { C, style } = require('./ui');
-
   console.log('\noh-my-claude project-init\n');
 
   let projectRoot;
@@ -238,10 +290,9 @@ function runProjectInit() {
   console.log(`\n  ${style('Project:', C.bold)} ${style(projectRoot, C.cyan)}\n`);
   console.log(`  ${style('✓', C.green)} allow: ${preset.permissions.allow.join(', ')}`);
 
-  // Project skills
+  const copiedSkills = [];
   const skillsSrc = path.join(PACKAGE_ROOT, 'project-skills');
   const skillsDest = path.join(claudeDir, 'skills');
-  const copiedSkills = [];
   try {
     for (const entry of fs.readdirSync(skillsSrc, { withFileTypes: true })) {
       if (!entry.isDirectory()) continue;
