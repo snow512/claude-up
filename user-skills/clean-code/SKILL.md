@@ -78,12 +78,24 @@ git ls-files --others --exclude-standard
 
 ---
 
-### 3단계: ESLint 실행 (TS/JS 프로젝트인 경우)
+### 3단계: 린터 실행
 
-ESLint 설정이 감지된 프로젝트에서만 실행한다. ESLint가 없으면 이 단계를 건너뛴다.
+프로젝트의 린터 설정을 확인하고 실행한다.
+
+**린터 설정이 없는 경우:**
+TS/JS 프로젝트인데 ESLint 설정이 없으면 사용자에게 설치 여부를 물어본다.
+> "이 프로젝트에 ESLint 설정이 없습니다. 설치할까요? (프로젝트에 맞는 기본 설정으로 세팅합니다)"
+
+사용자가 동의하면:
+- `npm init @eslint/config@latest` 실행 (또는 프로젝트에 맞는 설정 생성)
+- 설치 후 린터를 실행
+
+사용자가 거부하면 린터 단계를 건너뛴다.
+
+Python 프로젝트도 마찬가지 — ruff/flake8 설정이 없으면 ruff 설치를 제안한다.
 
 **풀스택 프로젝트 처리:**
-frontend와 backend에 각각 ESLint가 있으면 독립적으로 실행한다.
+frontend와 backend에 각각 린터가 있으면 독립적으로 실행한다.
 
 ```bash
 # 변경된 TS/JS 파일만 추출
