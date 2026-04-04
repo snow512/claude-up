@@ -15,30 +15,21 @@ allowed-tools: Bash, Read, Glob, Grep, AskUserQuestion
 - "서버재기동해" → 중지 + 시작
 - "서버내려" / "서버 중지해" → 중지만
 
+### 번들 스크립트
+
+- `scripts/detect-project.sh` — 프로젝트 유형, 포트, 디렉토리 구조 감지
+- `scripts/stop-by-port.sh` — 지정 포트의 프로세스를 graceful → force kill
+- `scripts/check-ports.sh` — 포트 LISTEN 상태 확인
+
 ---
 
-### 1단계: 프로젝트 유형 감지
+### 1단계: 프로젝트 감지
 
-| 확인 대상 | 판별 결과 |
-|-----------|----------|
-| `docker-compose.yml` + 서버 코드 | Docker + 로컬 혼합 |
-| `docker-compose.yml` 만 | Docker 기반 |
-| `backend/` + `frontend/` (또는 `server/` + `client/`) | 풀스택 (분리형) |
-| `frontend/` 또는 `client/` 만 | 프론트엔드 전용 |
-| `backend/` 또는 `server/` 만 | 백엔드 전용 |
-| `package.json` + `dev` 스크립트 | Node.js 단일 |
-| `manage.py` 또는 `app.py` 또는 `main.py` | Python (Django/Flask/FastAPI) |
-| `go.mod` + `main.go` | Go |
-| `Cargo.toml` | Rust |
+```bash
+${CLAUDE_SKILL_ROOT}/scripts/detect-project.sh
+```
 
-#### 포트 감지
-
-다음 위치에서 포트 정보를 찾는다:
-- `.env`, `backend/.env`, `server/.env`, `frontend/.env`
-- `package.json`의 scripts 내 `--port` 플래그
-- `docker-compose.yml`의 ports 매핑
-- `vite.config.*`의 server.port 설정
-- Django `settings.py`, Flask/FastAPI 실행 명령의 포트
+이 스크립트가 프로젝트 유형(Docker, 풀스택, 단일, Python, Go 등), 포트, 디렉토리를 출력한다.
 
 ---
 
@@ -48,10 +39,9 @@ allowed-tools: Bash, Read, Glob, Grep, AskUserQuestion
 
 1. **`stop.sh` 존재** → `./stop.sh` 실행
 2. **Docker** → `docker compose down` 또는 `docker compose stop`
-3. **포트 기반** → 감지된 포트를 사용하는 프로세스를 종료
+3. **포트 기반**:
    ```bash
-   ss -tlnp | grep :<PORT>
-   kill <PID>  # graceful 먼저, 실패 시 kill -9
+   ${CLAUDE_SKILL_ROOT}/scripts/stop-by-port.sh <port1> <port2> ...
    ```
 
 "서버내려" 모드면 여기서 종료.
@@ -65,15 +55,12 @@ allowed-tools: Bash, Read, Glob, Grep, AskUserQuestion
 #### A. 스크립트 기반 (`server.sh` / `client.sh` 존재)
 
 ```bash
-./server.sh   # 백그라운드
-# 5초 대기, 포트 확인
-./client.sh   # 백그라운드
-# 5초 대기, 포트 확인
+./server.sh &   # 백그라운드
+sleep 5
+./client.sh &   # 백그라운드
 ```
 
 #### B. Node.js (package.json 기반)
-
-`package.json`의 scripts에서 적절한 dev 명령을 찾아 실행한다.
 
 | 프로젝트 유형 | 실행 명령 |
 |--------------|----------|
@@ -94,7 +81,7 @@ allowed-tools: Bash, Read, Glob, Grep, AskUserQuestion
 #### D. Go
 
 ```bash
-go run . 또는 go run main.go
+go run .
 ```
 
 #### E. Docker
@@ -109,10 +96,8 @@ Docker + 로컬 서버 조합인 경우 Docker(DB 등) 먼저 올린 후 서버 
 
 ### 4단계: 구동 확인
 
-감지된 모든 포트가 LISTEN 상태인지 확인한다.
-
 ```bash
-ss -tlnp | grep :<PORT>
+${CLAUDE_SKILL_ROOT}/scripts/check-ports.sh <port1> <port2> ...
 ```
 
 ```
