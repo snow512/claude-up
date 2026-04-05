@@ -23,6 +23,10 @@
     "dotfiles",
     "cli"
   ],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "tsc"
+  },
   "license": "MIT",
   "repository": {
     "type": "git",
