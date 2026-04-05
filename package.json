@@ -25,6 +25,7 @@
   ],
   "scripts": {
     "build": "tsc",
+    "test": "tsc -p tsconfig.test.json && node --test dist-test/tests/*.test.js",
     "prepublishOnly": "tsc"
   },
   "license": "MIT",

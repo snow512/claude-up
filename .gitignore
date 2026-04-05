@@ -1,3 +1,4 @@
 node_modules/
 *.bak.*
 .claude/CLAUDE.local.md
+dist-test/
