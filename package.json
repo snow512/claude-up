@@ -2,6 +2,11 @@
   "name": "oh-my-claude",
   "version": "0.1.0-beta",
   "description": "Bootstrap and manage your Claude Code environment — npm CLI + Claude plugin hybrid",
+  "author": "snow512",
+  "homepage": "https://github.com/snow512/oh-my-claude#readme",
+  "bugs": {
+    "url": "https://github.com/snow512/oh-my-claude/issues"
+  },
   "bin": {
     "oh-my-claude": "./bin/cli.js",
     "omc": "./bin/cli.js"
@@ -21,12 +26,20 @@
     "claude-code",
     "bootstrap",
     "dotfiles",
-    "cli"
+    "cli",
+    "developer-tools",
+    "automation",
+    "skills",
+    "plugins",
+    "environment"
   ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "build": "tsc",
     "test": "tsc -p tsconfig.test.json && node --test dist-test/tests/*.test.js",
-    "prepublishOnly": "tsc"
+    "prepublishOnly": "npm test && tsc"
   },
   "license": "MIT",
   "repository": {

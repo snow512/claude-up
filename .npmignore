@@ -1,0 +1,17 @@
+# Source (compiled JS in bin/ is shipped instead)
+src/
+tests/
+tsconfig.json
+tsconfig.test.json
+dist-test/
+
+# Dev files
+.claude/
+.gitignore
+*.bak.*
+
+# Docs (not needed for npm package)
+docs/
+
+# Git
+.git/
