@@ -1,42 +1,38 @@
 import * as readline from 'readline';
 
-// --- Color System ---
+// --- Types ---
 
-export interface ColorMap {
-  reset: string;
-  bold: string;
-  dim: string;
-  cyan: string;
-  green: string;
-  red: string;
-  yellow: string;
-  magenta: string;
-  gray: string;
-  blue: string;
+export interface CheckboxItem {
+  name: string;
+  desc: string;
 }
 
-type ColorKey = keyof ColorMap;
+export interface SummaryResult {
+  ok: boolean;
+  label: string;
+  detail: string;
+}
 
-const isTTY: boolean = !!(process.stdout.isTTY && !process.env.NO_COLOR);
+// --- Color System ---
 
-const COLOR_KEYS: ColorKey[] = [
-  'reset', 'bold', 'dim', 'cyan', 'green', 'red', 'yellow', 'magenta', 'gray', 'blue',
-];
+const isTTY = !!(process.stdout.isTTY && !process.env.NO_COLOR);
 
-export const C: ColorMap = isTTY
-  ? {
-      reset:   '\x1b[0m',
-      bold:    '\x1b[1m',
-      dim:     '\x1b[2m',
-      cyan:    '\x1b[38;5;81m',
-      green:   '\x1b[38;5;82m',
-      red:     '\x1b[38;5;196m',
-      yellow:  '\x1b[38;5;226m',
-      magenta: '\x1b[38;5;205m',
-      gray:    '\x1b[38;5;245m',
-      blue:    '\x1b[38;5;75m',
-    }
-  : Object.fromEntries(COLOR_KEYS.map((k) => [k, ''])) as ColorMap;
+type ColorKey = 'reset' | 'bold' | 'dim' | 'cyan' | 'green' | 'red' | 'yellow' | 'magenta' | 'gray' | 'blue';
+
+export const C: Record<ColorKey, string> = isTTY ? {
+  reset:   '\x1b[0m',
+  bold:    '\x1b[1m',
+  dim:     '\x1b[2m',
+  cyan:    '\x1b[38;5;81m',
+  green:   '\x1b[38;5;82m',
+  red:     '\x1b[38;5;196m',
+  yellow:  '\x1b[38;5;226m',
+  magenta: '\x1b[38;5;205m',
+  gray:    '\x1b[38;5;245m',
+  blue:    '\x1b[38;5;75m',
+} : Object.fromEntries(
+  (['reset', 'bold', 'dim', 'cyan', 'green', 'red', 'yellow', 'magenta', 'gray', 'blue'] as ColorKey[]).map(k => [k, ''])
+) as Record<ColorKey, string>;
 
 export function style(text: string, ...codes: string[]): string {
   return codes.join('') + text + C.reset;
@@ -49,12 +45,8 @@ export const cursor = {
   show: (): boolean => isTTY && process.stdout.write('\x1b[?25h'),
 };
 
-// Ensure cursor is restored on exit
 process.on('exit', cursor.show);
-process.on('SIGINT', () => {
-  cursor.show();
-  process.exit(0);
-});
+process.on('SIGINT', () => { cursor.show(); process.exit(0); });
 
 // --- Banner ---
 
@@ -80,14 +72,14 @@ export function renderStep(current: number, total: number, label: string): void 
 
 // --- Progress Line (Spinner) ---
 
-export async function progressLine<T>(label: string, action: () => Promise<T>): Promise<T> {
+export async function progressLine<T>(label: string, action: () => T | Promise<T>): Promise<T> {
   if (!isTTY) {
     const result = await action();
     console.log(`  ${style('✓', C.green)} ${label}`);
     return result;
   }
 
-  const frames: string[] = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+  const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
   let i = 0;
   cursor.hide();
   const interval = setInterval(() => {
@@ -111,10 +103,10 @@ export async function progressLine<T>(label: string, action: () => Promise<T>): 
 
 // --- Ask (Y/n prompt) ---
 
-export function ask(question: string, defaultYes: boolean = true): Promise<boolean> {
+export function ask(question: string, defaultYes = true): Promise<boolean> {
   const hint = defaultYes ? style('[Y/n]', C.gray) : style('[y/N]', C.gray);
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  return new Promise<boolean>((resolve) => {
+  return new Promise((resolve) => {
     rl.question(`  ${question} ${hint}: `, (answer: string) => {
       rl.close();
       const a = answer.trim().toLowerCase();
@@ -126,25 +118,18 @@ export function ask(question: string, defaultYes: boolean = true): Promise<boole
 
 // --- Checkbox Selector ---
 
-export interface CheckboxItem {
-  name: string;
-  desc: string;
-}
-
 export function checkbox(items: CheckboxItem[]): Promise<string[]> {
   if (!isTTY) {
-    // Non-interactive: select all
-    return Promise.resolve(items.map((item) => item.name));
+    return Promise.resolve(items.map(item => item.name));
   }
 
-  return new Promise<string[]>((resolve) => {
-    const selected: boolean[] = items.map(() => true);
+  return new Promise((resolve) => {
+    const selected = items.map(() => true);
     let cursorPos = 0;
 
-    // Calculate box width
-    const maxName = Math.max(...items.map((i) => i.name.length));
-    const maxDesc = Math.max(...items.map((i) => i.desc.length));
-    const termWidth: number = process.stdout.columns || 80;
+    const maxName = Math.max(...items.map(i => i.name.length));
+    const maxDesc = Math.max(...items.map(i => i.desc.length));
+    const termWidth = process.stdout.columns || 80;
     const innerWidth = Math.min(4 + maxName + 3 + maxDesc + 1, termWidth - 8);
 
     function pad(str: string, len: number): string {
@@ -161,7 +146,7 @@ export function checkbox(items: CheckboxItem[]): Promise<string[]> {
       return `  ${style('│', C.blue)} ${pad(content, innerWidth)}${style('│', C.blue)}`;
     }
 
-    const totalLines = items.length + 3; // top border + items + bottom border + hint
+    const totalLines = items.length + 3;
     let firstRender = true;
 
     function render(): void {
@@ -176,26 +161,24 @@ export function checkbox(items: CheckboxItem[]): Promise<string[]> {
         console.log(renderRow(i));
       }
       console.log(`  ${style('└' + hLine + '┘', C.blue)}`);
-      process.stdout.write(
-        `  ${style('↑↓', C.cyan)} move  ${style('space', C.cyan)} toggle  ${style('a', C.cyan)} all  ${style('n', C.cyan)} none  ${style('enter', C.cyan)} confirm`,
-      );
+      process.stdout.write(`  ${style('↑↓', C.cyan)} move  ${style('space', C.cyan)} toggle  ${style('a', C.cyan)} all  ${style('n', C.cyan)} none  ${style('enter', C.cyan)} confirm`);
     }
 
     cursor.hide();
     render();
 
-    process.stdin.setRawMode(true);
+    process.stdin.setRawMode!(true);
     process.stdin.resume();
     process.stdin.setEncoding('utf-8');
 
     const onData = (key: string): void => {
       if (key === '\r' || key === '\n') {
-        process.stdin.setRawMode(false);
+        process.stdin.setRawMode!(false);
         process.stdin.pause();
         process.stdin.removeListener('data', onData);
         cursor.show();
         console.log('\n');
-        resolve(items.filter((_, i) => selected[i]).map((item) => item.name));
+        resolve(items.filter((_, i) => selected[i]).map(item => item.name));
         return;
       }
       if (key === ' ') {
@@ -220,12 +203,6 @@ export function checkbox(items: CheckboxItem[]): Promise<string[]> {
 }
 
 // --- Summary ---
-
-export interface SummaryResult {
-  ok: boolean;
-  label: string;
-  detail: string;
-}
 
 export function renderSummary(results: SummaryResult[]): void {
   console.log('');
