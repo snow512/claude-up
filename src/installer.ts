@@ -52,8 +52,8 @@ interface CloneItem {
 
 // --- Constants ---
 
-const CLAUDE_DIR = path.join(require('os').homedir(), '.claude');
-const PACKAGE_ROOT = path.resolve(__dirname, '..');
+export const CLAUDE_DIR = path.join(require('os').homedir(), '.claude');
+export const PACKAGE_ROOT = path.resolve(__dirname, '..');
 
 // --- Utilities ---
 
@@ -61,12 +61,12 @@ function timestamp(): string {
   return new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
 }
 
-function readJson(filePath: string): Record<string, unknown> | null {
+export function readJson(filePath: string): Record<string, unknown> | null {
   try { return JSON.parse(fs.readFileSync(filePath, 'utf-8')); }
   catch { return null; }
 }
 
-function writeJson(filePath: string, data: Record<string, unknown>): void {
+export function writeJson(filePath: string, data: Record<string, unknown>): void {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2) + '\n');
 }
@@ -92,7 +92,7 @@ function backup(filePath: string): string | null {
   } catch { return null; }
 }
 
-function isDirChanged(srcDir: string, destDir: string): boolean {
+export function isDirChanged(srcDir: string, destDir: string): boolean {
   try {
     const srcEntries = fs.readdirSync(srcDir, { withFileTypes: true });
     for (const entry of srcEntries) {
