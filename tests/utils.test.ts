@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 
-const FIXTURES = path.join(os.tmpdir(), 'omc-test-' + Date.now());
+const FIXTURES = path.join(os.tmpdir(), 'cup-test-' + Date.now());
 
 before(() => {
   fs.mkdirSync(FIXTURES, { recursive: true });

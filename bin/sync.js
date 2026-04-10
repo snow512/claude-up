@@ -44,13 +44,13 @@ const stream_1 = require("stream");
 const installer_1 = require("./installer");
 const ui_1 = require("./ui");
 // --- Constants ---
-const AUTH_PATH = path.join(installer_1.CLAUDE_DIR, '.omc-auth');
-const GIST_PREFIX = 'omc-skill--';
-const MANIFEST_FILE = 'omc-manifest.json';
-const SETTINGS_FILE = 'omc-settings.json';
-const CLAUDE_MD_FILE = 'omc-claude-md.md';
-const OMC_START = '<!-- <omc>';
-const OMC_END = '<!-- </omc> -->';
+const AUTH_PATH = path.join(installer_1.CLAUDE_DIR, '.cup-auth');
+const GIST_PREFIX = 'cup-skill--';
+const MANIFEST_FILE = 'cup-manifest.json';
+const SETTINGS_FILE = 'cup-settings.json';
+const CLAUDE_MD_FILE = 'cup-claude-md.md';
+const CUP_START = '<!-- <cup>';
+const CUP_END = '<!-- </cup> -->';
 const SYNC_SETTINGS_KEYS = ['permissions', 'enabledPlugins', 'extraKnownMarketplaces'];
 function isValidSkillName(name) {
     return /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(name) && !name.includes('..');
@@ -188,30 +188,30 @@ function buildManifest() {
         modifiedFiles,
     };
 }
-// --- Extract CLAUDE.md omc block ---
-function extractOmcBlock(claudeMdPath) {
+// --- Extract CLAUDE.md cup block ---
+function extractCupBlock(claudeMdPath) {
     try {
         const content = fs.readFileSync(claudeMdPath, 'utf-8');
-        const start = content.indexOf(OMC_START);
-        const end = content.indexOf(OMC_END);
+        const start = content.indexOf(CUP_START);
+        const end = content.indexOf(CUP_END);
         if (start === -1 || end === -1)
             return null;
-        return content.slice(start, end + OMC_END.length);
+        return content.slice(start, end + CUP_END.length);
     }
     catch {
         return null;
     }
 }
-function applyOmcBlock(claudeMdPath, block) {
+function applyCupBlock(claudeMdPath, block) {
     let content = '';
     try {
         content = fs.readFileSync(claudeMdPath, 'utf-8');
     }
     catch { }
-    const start = content.indexOf(OMC_START);
-    const end = content.indexOf(OMC_END);
+    const start = content.indexOf(CUP_START);
+    const end = content.indexOf(CUP_END);
     if (start !== -1 && end !== -1) {
-        content = content.slice(0, start) + block + content.slice(end + OMC_END.length);
+        content = content.slice(0, start) + block + content.slice(end + CUP_END.length);
     }
     else {
         content = content + '\n\n' + block + '\n';
@@ -306,13 +306,13 @@ async function runPush(args, opts) {
             syncSettings[key] = rawSettings[key];
     }
     const claudeMdPath = path.join(installer_1.CLAUDE_DIR, 'CLAUDE.md');
-    const omcBlock = extractOmcBlock(claudeMdPath);
+    const cupBlock = extractCupBlock(claudeMdPath);
     const gistFiles = {
         [MANIFEST_FILE]: { content: JSON.stringify(manifest, null, 2) },
         [SETTINGS_FILE]: { content: JSON.stringify(syncSettings, null, 2) },
     };
-    if (omcBlock) {
-        gistFiles[CLAUDE_MD_FILE] = { content: omcBlock };
+    if (cupBlock) {
+        gistFiles[CLAUDE_MD_FILE] = { content: cupBlock };
     }
     // Include modified/custom skill files
     for (const skillName of skillsToInclude) {
@@ -415,16 +415,16 @@ async function runPull(opts) {
             console.log(`  ${(0, ui_1.style)('✓', ui_1.C.green)} Settings applied.`);
         }
     }
-    // Apply CLAUDE.md omc block
+    // Apply CLAUDE.md cup block
     const claudeMdFile = gistData.files[CLAUDE_MD_FILE];
     if (claudeMdFile) {
-        const doIt = opts.yes || await (0, ui_1.ask)('Apply CLAUDE.md omc block?', true);
+        const doIt = opts.yes || await (0, ui_1.ask)('Apply CLAUDE.md cup block?', true);
         if (doIt) {
             const claudeMdPath = path.join(installer_1.CLAUDE_DIR, 'CLAUDE.md');
             if (fs.existsSync(claudeMdPath))
                 (0, installer_1.backup)(claudeMdPath);
-            applyOmcBlock(claudeMdPath, claudeMdFile.content);
-            console.log(`  ${(0, ui_1.style)('✓', ui_1.C.green)} CLAUDE.md omc block applied.`);
+            applyCupBlock(claudeMdPath, claudeMdFile.content);
+            console.log(`  ${(0, ui_1.style)('✓', ui_1.C.green)} CLAUDE.md cup block applied.`);
         }
     }
     // Apply removed skills (delete local)

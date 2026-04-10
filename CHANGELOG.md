@@ -13,12 +13,12 @@
 - Box-drawing banner UI
 - Smart update with change detection (only update what changed)
 - Session management: list and resume sessions across projects
-- Individual component installation (omc install skills/plugins/permissions/statusline)
+- Individual component installation (cup install skills/plugins/permissions/statusline)
 - Environment clone, backup (.tar.gz), and restore
-- Configuration diagnostics (omc doctor)
+- Configuration diagnostics (cup doctor)
 - Custom status line support
 - CLI options: --yes, --force, --lang, --output, --json, --verbose, --fork
-- `omc` alias for `claude-up`
+- `cup` alias for `claude-up`
 - TypeScript source with strict mode
 - Unit tests (29 tests, node:test)
 - Zero runtime dependencies (Node.js built-in modules only)

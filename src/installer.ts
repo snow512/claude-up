@@ -839,66 +839,66 @@ export async function runResume(sessionId: string | undefined, opts: Opts = {}):
 
 // --- CLAUDE.md management ---
 
-const OMC_START = '<!-- <omc> — managed by claude-up, do not edit manually -->';
-const OMC_END = '<!-- </omc> -->';
+const CUP_START = '<!-- <cup> — managed by claude-up, do not edit manually -->';
+const CUP_END = '<!-- </cup> -->';
 
-function getOmcContent(): string {
+function getCupContent(): string {
   const templatePath = path.join(PACKAGE_ROOT, 'presets', 'claude-md.md');
   return fs.readFileSync(templatePath, 'utf-8').trim();
 }
 
-function hasOmcBlock(content: string): boolean {
-  return content.includes(OMC_START) && content.includes(OMC_END);
+function hasCupBlock(content: string): boolean {
+  return content.includes(CUP_START) && content.includes(CUP_END);
 }
 
-function extractOmcBlock(content: string): string {
-  const startIdx = content.indexOf(OMC_START);
-  const endIdx = content.indexOf(OMC_END);
+function extractCupBlock(content: string): string {
+  const startIdx = content.indexOf(CUP_START);
+  const endIdx = content.indexOf(CUP_END);
   if (startIdx === -1 || endIdx === -1) return '';
-  return content.slice(startIdx, endIdx + OMC_END.length);
+  return content.slice(startIdx, endIdx + CUP_END.length);
 }
 
-function removeOmcBlock(content: string): string {
-  const startIdx = content.indexOf(OMC_START);
-  const endIdx = content.indexOf(OMC_END);
+function removeCupBlock(content: string): string {
+  const startIdx = content.indexOf(CUP_START);
+  const endIdx = content.indexOf(CUP_END);
   if (startIdx === -1 || endIdx === -1) return content;
-  return (content.slice(0, startIdx) + content.slice(endIdx + OMC_END.length)).replace(/\n{3,}/g, '\n\n').trim();
+  return (content.slice(0, startIdx) + content.slice(endIdx + CUP_END.length)).replace(/\n{3,}/g, '\n\n').trim();
 }
 
 export async function installClaudeMd(useDefaults: boolean): Promise<SummaryResult> {
   const claudeMdPath = path.join(CLAUDE_DIR, 'CLAUDE.md');
-  const omcContent = getOmcContent();
+  const cupContent = getCupContent();
 
   const existing = fs.existsSync(claudeMdPath) ? fs.readFileSync(claudeMdPath, 'utf-8') : '';
 
-  if (hasOmcBlock(existing)) {
-    const currentBlock = extractOmcBlock(existing);
-    if (currentBlock.trim() === omcContent.trim()) {
+  if (hasCupBlock(existing)) {
+    const currentBlock = extractCupBlock(existing);
+    if (currentBlock.trim() === cupContent.trim()) {
       return { ok: true, label: 'CLAUDE.md', detail: 'up to date' };
     }
 
     // Block exists but content changed — check if user modified it
     let install = useDefaults;
     if (!useDefaults) {
-      install = await ask('CLAUDE.md omc section has updates. Apply?', true);
+      install = await ask('CLAUDE.md cup section has updates. Apply?', true);
     }
 
     if (install) {
-      const updated = existing.replace(currentBlock, omcContent);
+      const updated = existing.replace(currentBlock, cupContent);
       fs.writeFileSync(claudeMdPath, updated);
       return { ok: true, label: 'CLAUDE.md', detail: 'updated' };
     }
     return { ok: false, label: 'CLAUDE.md', detail: 'skipped' };
   }
 
-  // No omc block yet — append
+  // No cup block yet — append
   let install = useDefaults;
   if (!useDefaults) {
     install = await ask('Add claude-up section to CLAUDE.md?', true);
   }
 
   if (install) {
-    const newContent = existing ? existing.trimEnd() + '\n\n' + omcContent + '\n' : omcContent + '\n';
+    const newContent = existing ? existing.trimEnd() + '\n\n' + cupContent + '\n' : cupContent + '\n';
     fs.mkdirSync(path.dirname(claudeMdPath), { recursive: true });
     fs.writeFileSync(claudeMdPath, newContent);
     return { ok: true, label: 'CLAUDE.md', detail: 'installed' };
@@ -917,15 +917,15 @@ export async function runUninstall(opts: Opts = {}): Promise<void> {
   const statuslineDest = path.join(CLAUDE_DIR, 'statusline-command.sh');
   const claudeMdPath = path.join(CLAUDE_DIR, 'CLAUDE.md');
 
-  // 1. Remove omc block from CLAUDE.md
+  // 1. Remove cup block from CLAUDE.md
   if (fs.existsSync(claudeMdPath)) {
     const content = fs.readFileSync(claudeMdPath, 'utf-8');
-    if (hasOmcBlock(content)) {
-      const cleaned = removeOmcBlock(content);
+    if (hasCupBlock(content)) {
+      const cleaned = removeCupBlock(content);
       if (cleaned !== content) {
         if (opts.yes || await ask('Remove claude-up section from CLAUDE.md?', true)) {
           fs.writeFileSync(claudeMdPath, cleaned + '\n');
-          console.log(`  ${style('✓', C.green)} CLAUDE.md — omc section removed`);
+          console.log(`  ${style('✓', C.green)} CLAUDE.md — cup section removed`);
         } else {
           console.log(`  ${style('⏭', C.gray)}  CLAUDE.md skipped`);
         }
@@ -947,15 +947,15 @@ export async function runUninstall(opts: Opts = {}): Promise<void> {
       .filter(e => e.isDirectory())
       .map(e => e.name);
 
-    const omcSkills = localSkills.filter(s => repoSkills.has(s));
+    const cupSkills = localSkills.filter(s => repoSkills.has(s));
     const userSkills = localSkills.filter(s => !repoSkills.has(s));
 
-    if (omcSkills.length > 0) {
-      if (opts.yes || await ask(`Remove ${omcSkills.length} claude-up skills?`, true)) {
-        for (const name of omcSkills) {
+    if (cupSkills.length > 0) {
+      if (opts.yes || await ask(`Remove ${cupSkills.length} claude-up skills?`, true)) {
+        for (const name of cupSkills) {
           fs.rmSync(path.join(skillsDest, name), { recursive: true });
         }
-        console.log(`  ${style('✓', C.green)} ${omcSkills.length} skills removed`);
+        console.log(`  ${style('✓', C.green)} ${cupSkills.length} skills removed`);
       } else {
         console.log(`  ${style('⏭', C.gray)}  Skills skipped`);
       }

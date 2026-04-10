@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 
-const FIXTURES = path.join(os.tmpdir(), 'omc-sync-test-' + Date.now());
+const FIXTURES = path.join(os.tmpdir(), 'cup-sync-test-' + Date.now());
 
 before(() => {
   fs.mkdirSync(FIXTURES, { recursive: true });
@@ -16,9 +16,9 @@ after(() => {
 
 // --- Inline helpers (re-implemented, not imported from sync.ts) ---
 
-const GIST_PREFIX = 'omc-skill--';
-const MANIFEST_FILE = 'omc-manifest.json';
-const SETTINGS_FILE = 'omc-settings.json';
+const GIST_PREFIX = 'cup-skill--';
+const MANIFEST_FILE = 'cup-manifest.json';
+const SETTINGS_FILE = 'cup-settings.json';
 
 interface AuthData { token: string; gistId?: string; }
 
@@ -113,7 +113,7 @@ function buildManifest(repoSkillsDir: string, localSkillsDir: string): {
 // --- Test 1: Auth file — write/read/missing ---
 
 describe('auth file', () => {
-  const authPath = path.join(FIXTURES, 'auth', '.omc-auth');
+  const authPath = path.join(FIXTURES, 'auth', '.cup-auth');
 
   afterEach(() => {
     try { fs.rmSync(path.join(FIXTURES, 'auth'), { recursive: true, force: true }); } catch { /* ok */ }
@@ -138,7 +138,7 @@ describe('auth file', () => {
   });
 
   it('should return null for missing auth file', () => {
-    const result = loadAuth(path.join(FIXTURES, 'nonexistent', '.omc-auth'));
+    const result = loadAuth(path.join(FIXTURES, 'nonexistent', '.cup-auth'));
     assert.equal(result, null);
   });
 
@@ -223,14 +223,14 @@ describe('manifest building', () => {
 // --- Test 3: Gist file naming convention ---
 
 describe('gist file naming', () => {
-  it('should produce omc-skill--{name}.md from skill name', () => {
+  it('should produce cup-skill--{name}.md from skill name', () => {
     const skillName = 'clean-code';
     const key = `${GIST_PREFIX}${skillName}.md`;
-    assert.equal(key, 'omc-skill--clean-code.md');
+    assert.equal(key, 'cup-skill--clean-code.md');
   });
 
   it('should extract skill name from gist file key', () => {
-    const key = 'omc-skill--commit-push.md';
+    const key = 'cup-skill--commit-push.md';
     const name = key.startsWith(GIST_PREFIX) ? key.slice(GIST_PREFIX.length, -'.md'.length) : null;
     assert.equal(name, 'commit-push');
   });
@@ -242,7 +242,7 @@ describe('gist file naming', () => {
   });
 
   it('should not match non-skill files', () => {
-    const key = 'omc-manifest.json';
+    const key = 'cup-manifest.json';
     const isSkill = key.startsWith(GIST_PREFIX);
     assert.equal(isSkill, false);
   });
