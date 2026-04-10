@@ -33,6 +33,10 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.PACKAGE_ROOT = exports.CLAUDE_DIR = void 0;
+exports.readJson = readJson;
+exports.writeJson = writeJson;
+exports.isDirChanged = isDirChanged;
 exports.runInit = runInit;
 exports.runInstall = runInstall;
 exports.runProjectInit = runProjectInit;
@@ -52,8 +56,8 @@ const readline = __importStar(require("readline"));
 const child_process_1 = require("child_process");
 const ui_1 = require("./ui");
 // --- Constants ---
-const CLAUDE_DIR = path.join(require('os').homedir(), '.claude');
-const PACKAGE_ROOT = path.resolve(__dirname, '..');
+exports.CLAUDE_DIR = path.join(require('os').homedir(), '.claude');
+exports.PACKAGE_ROOT = path.resolve(__dirname, '..');
 // --- Utilities ---
 function timestamp() {
     return new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
@@ -124,7 +128,7 @@ function isDirChanged(srcDir, destDir) {
     }
 }
 function loadPreset(name) {
-    const presetPath = path.join(PACKAGE_ROOT, 'presets', name);
+    const presetPath = path.join(exports.PACKAGE_ROOT, 'presets', name);
     const preset = readJson(presetPath);
     if (!preset || !preset.permissions) {
         console.error(`ERROR: ${name} is missing or invalid`);
@@ -133,7 +137,7 @@ function loadPreset(name) {
     return preset;
 }
 function getAvailableSkills() {
-    const skillsSrc = path.join(PACKAGE_ROOT, 'user-skills');
+    const skillsSrc = path.join(exports.PACKAGE_ROOT, 'user-skills');
     try {
         return fs.readdirSync(skillsSrc, { withFileTypes: true })
             .filter(e => e.isDirectory())
@@ -205,8 +209,8 @@ function copySkillWithLang(srcDir, destDir, lang) {
     catch { }
 }
 async function installSkills(useDefaults, lang) {
-    const skillsSrc = path.join(PACKAGE_ROOT, 'user-skills');
-    const skillsDest = path.join(CLAUDE_DIR, 'skills');
+    const skillsSrc = path.join(exports.PACKAGE_ROOT, 'user-skills');
+    const skillsDest = path.join(exports.CLAUDE_DIR, 'skills');
     const available = getAvailableSkills();
     if (available.length === 0) {
         return { ok: false, label: 'Skills', detail: 'no skills found', selected: [] };
@@ -231,8 +235,8 @@ async function installSkills(useDefaults, lang) {
     return { ok: true, label: 'Skills', detail: `${selectedNames.length}/${available.length} installed`, selected: selectedNames };
 }
 async function installStatusLine(settingsPath, useDefaults) {
-    const statuslineSrc = path.join(PACKAGE_ROOT, 'statusline-command.sh');
-    const statuslineDest = path.join(CLAUDE_DIR, 'statusline-command.sh');
+    const statuslineSrc = path.join(exports.PACKAGE_ROOT, 'statusline-command.sh');
+    const statuslineDest = path.join(exports.CLAUDE_DIR, 'statusline-command.sh');
     if (!fs.existsSync(statuslineSrc)) {
         return { ok: false, label: 'Status Line', detail: 'not available' };
     }
@@ -277,7 +281,7 @@ async function runInit(opts = {}) {
         });
     }
     const totalSteps = 7;
-    const settingsPath = path.join(CLAUDE_DIR, 'settings.json');
+    const settingsPath = path.join(exports.CLAUDE_DIR, 'settings.json');
     const preset = loadPreset('user.json');
     const bakPath = backup(settingsPath);
     if (bakPath)
@@ -320,7 +324,7 @@ async function runInit(opts = {}) {
 // --- Install ---
 async function runInstall(target, opts = {}) {
     (0, ui_1.renderBanner)();
-    const settingsPath = path.join(CLAUDE_DIR, 'settings.json');
+    const settingsPath = path.join(exports.CLAUDE_DIR, 'settings.json');
     const preset = loadPreset('user.json');
     const sysLocale = (process.env.LANG || process.env.LC_ALL || process.env.LANGUAGE || 'en').toLowerCase();
     const lang = opts.lang || (sysLocale.startsWith('ko') ? 'ko' : 'en');
@@ -361,8 +365,8 @@ async function runInstall(target, opts = {}) {
         }
         case 'statusline': {
             console.log(`  ${(0, ui_1.style)('Installing status line...', ui_1.C.bold)}\n`);
-            const src = path.join(PACKAGE_ROOT, 'statusline-command.sh');
-            const dest = path.join(CLAUDE_DIR, 'statusline-command.sh');
+            const src = path.join(exports.PACKAGE_ROOT, 'statusline-command.sh');
+            const dest = path.join(exports.CLAUDE_DIR, 'statusline-command.sh');
             if (!fs.existsSync(src)) {
                 console.error(`  ${(0, ui_1.style)('ERROR:', ui_1.C.red)} statusline-command.sh not found\n`);
                 break;
@@ -408,7 +412,7 @@ function runProjectInit(opts = {}) {
     console.log(`\n  ${(0, ui_1.style)('Project:', ui_1.C.bold)} ${(0, ui_1.style)(projectRoot, ui_1.C.cyan)}\n`);
     console.log(`  ${(0, ui_1.style)('✓', ui_1.C.green)} allow: ${(preset.permissions.allow || []).join(', ')}`);
     const copiedSkills = [];
-    const skillsSrc = path.join(PACKAGE_ROOT, 'project-skills');
+    const skillsSrc = path.join(exports.PACKAGE_ROOT, 'project-skills');
     const skillsDest = path.join(claudeDir, 'skills');
     try {
         for (const entry of fs.readdirSync(skillsSrc, { withFileTypes: true })) {
@@ -430,10 +434,10 @@ async function runClone(opts = {}) {
     const outDir = opts.output || path.join(process.cwd(), `claude-env-${timestamp()}`);
     fs.mkdirSync(outDir, { recursive: true });
     const items = [
-        { src: path.join(CLAUDE_DIR, 'settings.json'), dest: 'settings.json', label: 'Settings' },
-        { src: path.join(CLAUDE_DIR, 'statusline-command.sh'), dest: 'statusline-command.sh', label: 'Status line' },
-        { src: path.join(CLAUDE_DIR, 'skills'), dest: 'skills', label: 'User skills', dir: true },
-        { src: path.join(CLAUDE_DIR, 'commands'), dest: 'commands', label: 'User commands', dir: true },
+        { src: path.join(exports.CLAUDE_DIR, 'settings.json'), dest: 'settings.json', label: 'Settings' },
+        { src: path.join(exports.CLAUDE_DIR, 'statusline-command.sh'), dest: 'statusline-command.sh', label: 'Status line' },
+        { src: path.join(exports.CLAUDE_DIR, 'skills'), dest: 'skills', label: 'User skills', dir: true },
+        { src: path.join(exports.CLAUDE_DIR, 'commands'), dest: 'commands', label: 'User commands', dir: true },
     ];
     let count = 0;
     for (const item of items) {
@@ -449,7 +453,7 @@ async function runClone(opts = {}) {
         console.log(`  ${(0, ui_1.style)('✓', ui_1.C.green)} ${item.label}`);
         count++;
     }
-    const pluginsFile = path.join(CLAUDE_DIR, 'plugins', 'installed_plugins.json');
+    const pluginsFile = path.join(exports.CLAUDE_DIR, 'plugins', 'installed_plugins.json');
     if (fs.existsSync(pluginsFile)) {
         fs.mkdirSync(path.join(outDir, 'plugins'), { recursive: true });
         fs.copyFileSync(pluginsFile, path.join(outDir, 'plugins', 'installed_plugins.json'));
@@ -465,7 +469,7 @@ async function runBackup(opts = {}) {
     const tarPath = opts.output || path.join(process.cwd(), `claude-backup-${timestamp()}.tar.gz`);
     console.log(`  ${(0, ui_1.style)('Creating backup...', ui_1.C.bold)}\n`);
     await (0, ui_1.progressLine)('Compressing ~/.claude/', () => {
-        (0, child_process_1.execFileSync)('tar', ['--exclude', '*/plugins/cache/*', '--exclude', '*/plugins/marketplaces/*', '-czf', tarPath, '-C', path.dirname(CLAUDE_DIR), path.basename(CLAUDE_DIR)], { stdio: 'pipe' });
+        (0, child_process_1.execFileSync)('tar', ['--exclude', '*/plugins/cache/*', '--exclude', '*/plugins/marketplaces/*', '-czf', tarPath, '-C', path.dirname(exports.CLAUDE_DIR), path.basename(exports.CLAUDE_DIR)], { stdio: 'pipe' });
     });
     const size = fs.statSync(tarPath).size;
     const sizeStr = size > 1048576 ? `${(size / 1048576).toFixed(1)} MB` : `${(size / 1024).toFixed(0)} KB`;
@@ -485,17 +489,17 @@ async function runRestore(source, opts = {}) {
     }
     const stat = fs.statSync(source);
     if (!opts.force) {
-        const b = backup(path.join(CLAUDE_DIR, 'settings.json'));
+        const b = backup(path.join(exports.CLAUDE_DIR, 'settings.json'));
         if (b)
             console.log(`  ${(0, ui_1.style)('💾', ui_1.C.gray)} ${(0, ui_1.style)('Backup: ' + b, ui_1.C.gray)}\n`);
     }
     if (stat.isDirectory()) {
         console.log(`  ${(0, ui_1.style)('Restoring from clone folder...', ui_1.C.bold)}\n`);
         const items = [
-            { src: 'settings.json', dest: path.join(CLAUDE_DIR, 'settings.json'), label: 'Settings' },
-            { src: 'statusline-command.sh', dest: path.join(CLAUDE_DIR, 'statusline-command.sh'), label: 'Status line' },
-            { src: 'skills', dest: path.join(CLAUDE_DIR, 'skills'), label: 'User skills', dir: true },
-            { src: 'commands', dest: path.join(CLAUDE_DIR, 'commands'), label: 'User commands', dir: true },
+            { src: 'settings.json', dest: path.join(exports.CLAUDE_DIR, 'settings.json'), label: 'Settings' },
+            { src: 'statusline-command.sh', dest: path.join(exports.CLAUDE_DIR, 'statusline-command.sh'), label: 'Status line' },
+            { src: 'skills', dest: path.join(exports.CLAUDE_DIR, 'skills'), label: 'User skills', dir: true },
+            { src: 'commands', dest: path.join(exports.CLAUDE_DIR, 'commands'), label: 'User commands', dir: true },
         ];
         let count = 0;
         for (const item of items) {
@@ -518,7 +522,7 @@ async function runRestore(source, opts = {}) {
     else if (source.endsWith('.tar.gz') || source.endsWith('.tgz')) {
         console.log(`  ${(0, ui_1.style)('Restoring from backup...', ui_1.C.bold)}\n`);
         await (0, ui_1.progressLine)('Extracting backup', () => {
-            (0, child_process_1.execFileSync)('tar', ['xzf', path.resolve(source), '-C', path.dirname(CLAUDE_DIR)], { stdio: 'pipe' });
+            (0, child_process_1.execFileSync)('tar', ['xzf', path.resolve(source), '-C', path.dirname(exports.CLAUDE_DIR)], { stdio: 'pipe' });
         });
         console.log(`\n  ${(0, ui_1.style)('✓', ui_1.C.green)} ${(0, ui_1.style)('Restore complete', ui_1.C.bold)}\n`);
     }
@@ -531,7 +535,7 @@ async function runRestore(source, opts = {}) {
 function runStatus(opts = {}) {
     (0, ui_1.renderBanner)();
     console.log(`  ${(0, ui_1.style)('Environment Status', ui_1.C.bold)}\n`);
-    const settingsPath = path.join(CLAUDE_DIR, 'settings.json');
+    const settingsPath = path.join(exports.CLAUDE_DIR, 'settings.json');
     const settings = readJson(settingsPath);
     if (settings) {
         const perms = settings.permissions;
@@ -546,7 +550,7 @@ function runStatus(opts = {}) {
     else {
         console.log(`  ${(0, ui_1.style)('Settings', ui_1.C.bold)} ${(0, ui_1.style)('not found', ui_1.C.red)}`);
     }
-    const skillsDir = path.join(CLAUDE_DIR, 'skills');
+    const skillsDir = path.join(exports.CLAUDE_DIR, 'skills');
     let skillNames = [];
     try {
         skillNames = fs.readdirSync(skillsDir, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name);
@@ -563,7 +567,7 @@ function runStatus(opts = {}) {
         for (const name of pluginNames.sort())
             console.log(`    ${(0, ui_1.style)('•', ui_1.C.cyan)} ${name.replace(/@.*$/, '')}`);
     }
-    const statuslinePath = path.join(CLAUDE_DIR, 'statusline-command.sh');
+    const statuslinePath = path.join(exports.CLAUDE_DIR, 'statusline-command.sh');
     console.log(`\n  ${(0, ui_1.style)('Status Line', ui_1.C.bold)}`);
     console.log(fs.existsSync(statuslinePath) ? `    ${(0, ui_1.style)('✓', ui_1.C.green)} ${statuslinePath}` : `    ${(0, ui_1.style)('✗', ui_1.C.gray)} not installed`);
     console.log('');
@@ -577,12 +581,12 @@ function runDoctor(opts = {}) {
     const ok = (msg) => { console.log(`  ${(0, ui_1.style)('✓', ui_1.C.green)} ${msg}`); };
     const warn = (msg) => { console.log(`  ${(0, ui_1.style)('!', ui_1.C.yellow)} ${msg}`); warnings++; };
     const fail = (msg) => { console.log(`  ${(0, ui_1.style)('✗', ui_1.C.red)} ${msg}`); issues++; };
-    if (!fs.existsSync(CLAUDE_DIR)) {
+    if (!fs.existsSync(exports.CLAUDE_DIR)) {
         fail('~/.claude/ not found — run "omc init"');
         return;
     }
     ok('~/.claude/ directory exists');
-    const settingsPath = path.join(CLAUDE_DIR, 'settings.json');
+    const settingsPath = path.join(exports.CLAUDE_DIR, 'settings.json');
     const settings = readJson(settingsPath);
     if (settings)
         ok('settings.json is valid JSON');
@@ -608,7 +612,7 @@ function runDoctor(opts = {}) {
         ok('Marketplace configured');
     else
         warn('No marketplace configured');
-    const skillsDir = path.join(CLAUDE_DIR, 'skills');
+    const skillsDir = path.join(exports.CLAUDE_DIR, 'skills');
     if (fs.existsSync(skillsDir)) {
         const skills = fs.readdirSync(skillsDir, { withFileTypes: true }).filter(e => e.isDirectory());
         if (skills.length > 0) {
@@ -628,7 +632,7 @@ function runDoctor(opts = {}) {
     }
     else
         warn('No skills directory');
-    const slPath = path.join(CLAUDE_DIR, 'statusline-command.sh');
+    const slPath = path.join(exports.CLAUDE_DIR, 'statusline-command.sh');
     if (fs.existsSync(slPath)) {
         if (fs.statSync(slPath).mode & 0o111)
             ok('statusline-command.sh is executable');
@@ -640,7 +644,7 @@ function runDoctor(opts = {}) {
             warn('statusLine not configured in settings.json');
     }
     try {
-        const backups = fs.readdirSync(CLAUDE_DIR).filter(f => f.includes('.bak.'));
+        const backups = fs.readdirSync(exports.CLAUDE_DIR).filter(f => f.includes('.bak.'));
         if (backups.length > 5)
             warn(`${backups.length} backup files — consider cleanup`);
     }
@@ -660,7 +664,7 @@ function runDoctor(opts = {}) {
 async function runUpdate(opts = {}) {
     (0, ui_1.renderBanner)();
     console.log(`  ${(0, ui_1.style)('Checking for updates...', ui_1.C.bold)}\n`);
-    const settingsPath = path.join(CLAUDE_DIR, 'settings.json');
+    const settingsPath = path.join(exports.CLAUDE_DIR, 'settings.json');
     const settings = readJson(settingsPath) || {};
     const preset = loadPreset('user.json');
     // Permissions
@@ -696,8 +700,8 @@ async function runUpdate(opts = {}) {
     else
         console.log(`  ${(0, ui_1.style)('–', ui_1.C.gray)} Plugins (up to date)`);
     // Statusline
-    const slSrc = path.join(PACKAGE_ROOT, 'statusline-command.sh');
-    const slDest = path.join(CLAUDE_DIR, 'statusline-command.sh');
+    const slSrc = path.join(exports.PACKAGE_ROOT, 'statusline-command.sh');
+    const slDest = path.join(exports.CLAUDE_DIR, 'statusline-command.sh');
     if (fs.existsSync(slSrc) && fs.existsSync(slDest)) {
         if (!fs.readFileSync(slSrc).equals(fs.readFileSync(slDest))) {
             console.log(`  ${(0, ui_1.style)('!', ui_1.C.yellow)} Status line changed`);
@@ -713,7 +717,7 @@ async function runUpdate(opts = {}) {
     }
     // Skills
     let lang = 'en';
-    const skillsDest = path.join(CLAUDE_DIR, 'skills');
+    const skillsDest = path.join(exports.CLAUDE_DIR, 'skills');
     try {
         const first = fs.readdirSync(skillsDest, { withFileTypes: true }).find(e => e.isDirectory());
         if (first) {
@@ -724,7 +728,7 @@ async function runUpdate(opts = {}) {
     }
     catch { }
     console.log(`\n  ${(0, ui_1.style)(`Skills (${lang}):`, ui_1.C.bold)}`);
-    const skillsSrc = path.join(PACKAGE_ROOT, 'user-skills');
+    const skillsSrc = path.join(exports.PACKAGE_ROOT, 'user-skills');
     const repoSkills = new Set();
     try {
         for (const e of fs.readdirSync(skillsSrc, { withFileTypes: true })) {
@@ -787,7 +791,7 @@ async function runUpdate(opts = {}) {
 }
 // --- Sessions ---
 function getSessionList(opts = {}) {
-    const projectsDir = path.join(CLAUDE_DIR, 'projects');
+    const projectsDir = path.join(exports.CLAUDE_DIR, 'projects');
     if (!fs.existsSync(projectsDir))
         return [];
     const projects = fs.readdirSync(projectsDir, { withFileTypes: true }).filter(e => e.isDirectory());
@@ -914,7 +918,7 @@ async function runResume(sessionId, opts = {}) {
 const OMC_START = '<!-- <omc> — managed by oh-my-claude, do not edit manually -->';
 const OMC_END = '<!-- </omc> -->';
 function getOmcContent() {
-    const templatePath = path.join(PACKAGE_ROOT, 'presets', 'claude-md.md');
+    const templatePath = path.join(exports.PACKAGE_ROOT, 'presets', 'claude-md.md');
     return fs.readFileSync(templatePath, 'utf-8').trim();
 }
 function hasOmcBlock(content) {
@@ -935,7 +939,7 @@ function removeOmcBlock(content) {
     return (content.slice(0, startIdx) + content.slice(endIdx + OMC_END.length)).replace(/\n{3,}/g, '\n\n').trim();
 }
 async function installClaudeMd(useDefaults) {
-    const claudeMdPath = path.join(CLAUDE_DIR, 'CLAUDE.md');
+    const claudeMdPath = path.join(exports.CLAUDE_DIR, 'CLAUDE.md');
     const omcContent = getOmcContent();
     const existing = fs.existsSync(claudeMdPath) ? fs.readFileSync(claudeMdPath, 'utf-8') : '';
     if (hasOmcBlock(existing)) {
@@ -972,10 +976,10 @@ async function installClaudeMd(useDefaults) {
 async function runUninstall(opts = {}) {
     (0, ui_1.renderBanner)();
     console.log(`  ${(0, ui_1.style)('Uninstalling oh-my-claude...', ui_1.C.bold)}\n`);
-    const settingsPath = path.join(CLAUDE_DIR, 'settings.json');
-    const skillsDest = path.join(CLAUDE_DIR, 'skills');
-    const statuslineDest = path.join(CLAUDE_DIR, 'statusline-command.sh');
-    const claudeMdPath = path.join(CLAUDE_DIR, 'CLAUDE.md');
+    const settingsPath = path.join(exports.CLAUDE_DIR, 'settings.json');
+    const skillsDest = path.join(exports.CLAUDE_DIR, 'skills');
+    const statuslineDest = path.join(exports.CLAUDE_DIR, 'statusline-command.sh');
+    const claudeMdPath = path.join(exports.CLAUDE_DIR, 'CLAUDE.md');
     // 1. Remove omc block from CLAUDE.md
     if (fs.existsSync(claudeMdPath)) {
         const content = fs.readFileSync(claudeMdPath, 'utf-8');
@@ -994,7 +998,7 @@ async function runUninstall(opts = {}) {
     }
     // 2. Remove skills
     if (fs.existsSync(skillsDest)) {
-        const skillsSrc = path.join(PACKAGE_ROOT, 'user-skills');
+        const skillsSrc = path.join(exports.PACKAGE_ROOT, 'user-skills');
         const repoSkills = new Set();
         try {
             for (const e of fs.readdirSync(skillsSrc, { withFileTypes: true })) {
