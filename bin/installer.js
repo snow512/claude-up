@@ -577,11 +577,15 @@ function runStatus(opts = {}) {
 function runDoctor(opts = {}) {
     (0, ui_1.renderBanner)();
     console.log(`  ${(0, ui_1.style)('Checking configuration...', ui_1.C.bold)}\n`);
+    const v = opts.verbose ?? false;
     let issues = 0;
     let warnings = 0;
     const ok = (msg) => { console.log(`  ${(0, ui_1.style)('✓', ui_1.C.green)} ${msg}`); };
     const warn = (msg) => { console.log(`  ${(0, ui_1.style)('!', ui_1.C.yellow)} ${msg}`); warnings++; };
     const fail = (msg) => { console.log(`  ${(0, ui_1.style)('✗', ui_1.C.red)} ${msg}`); issues++; };
+    const detail = (lines) => { if (v)
+        for (const l of lines)
+            console.log(`    ${(0, ui_1.style)(l, ui_1.C.gray)}`); };
     if (!fs.existsSync(exports.CLAUDE_DIR)) {
         fail('~/.claude/ not found — run "cup init"');
         return;
@@ -596,17 +600,24 @@ function runDoctor(opts = {}) {
     else
         fail('settings.json not found');
     const perms = settings?.permissions || {};
-    if (perms.allow?.length)
+    if (perms.allow?.length) {
         ok(`permissions.allow: ${perms.allow.length} rules`);
+        detail(perms.allow);
+    }
     else
         warn('No allow permissions');
-    if (perms.deny?.length)
+    if (perms.deny?.length) {
         ok(`permissions.deny: ${perms.deny.length} rules`);
+        detail(perms.deny);
+    }
     else
         warn('No deny permissions — destructive commands not blocked');
     const ep = settings?.enabledPlugins;
-    if (ep && Object.keys(ep).length > 0)
-        ok(`${Object.keys(ep).length} plugins enabled`);
+    const pluginNames = ep ? Object.keys(ep) : [];
+    if (pluginNames.length > 0) {
+        ok(`${pluginNames.length} plugins enabled`);
+        detail(pluginNames);
+    }
     else
         warn('No plugins enabled');
     if (settings?.extraKnownMarketplaces)
@@ -618,6 +629,7 @@ function runDoctor(opts = {}) {
         const skills = fs.readdirSync(skillsDir, { withFileTypes: true }).filter(e => e.isDirectory());
         if (skills.length > 0) {
             ok(`${skills.length} user skills installed`);
+            detail(skills.map(s => s.name));
             let broken = 0;
             for (const s of skills) {
                 if (!fs.existsSync(path.join(skillsDir, s.name, 'SKILL.md'))) {
@@ -646,8 +658,18 @@ function runDoctor(opts = {}) {
     }
     try {
         const backups = fs.readdirSync(exports.CLAUDE_DIR).filter(f => f.includes('.bak.'));
-        if (backups.length > 5)
-            warn(`${backups.length} backup files — consider cleanup`);
+        if (backups.length > 5) {
+            const totalKB = backups.reduce((sum, f) => {
+                try {
+                    return sum + fs.statSync(path.join(exports.CLAUDE_DIR, f)).size;
+                }
+                catch {
+                    return sum;
+                }
+            }, 0);
+            warn(`${backups.length} backup files (${Math.round(totalKB / 1024)}KB) in ~/.claude/ — run "rm ~/.claude/*.bak.*" to clean up`);
+            detail(backups);
+        }
     }
     catch { }
     console.log('');

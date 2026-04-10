@@ -563,11 +563,13 @@ export function runDoctor(opts: Opts = {}): void {
   renderBanner();
   console.log(`  ${style('Checking configuration...', C.bold)}\n`);
 
+  const v = opts.verbose ?? false;
   let issues = 0;
   let warnings = 0;
   const ok = (msg: string): void => { console.log(`  ${style('✓', C.green)} ${msg}`); };
   const warn = (msg: string): void => { console.log(`  ${style('!', C.yellow)} ${msg}`); warnings++; };
   const fail = (msg: string): void => { console.log(`  ${style('✗', C.red)} ${msg}`); issues++; };
+  const detail = (lines: string[]): void => { if (v) for (const l of lines) console.log(`    ${style(l, C.gray)}`); };
 
   if (!fs.existsSync(CLAUDE_DIR)) { fail('~/.claude/ not found — run "cup init"'); return; }
   ok('~/.claude/ directory exists');
@@ -579,14 +581,21 @@ export function runDoctor(opts: Opts = {}): void {
   else fail('settings.json not found');
 
   const perms = (settings?.permissions as { allow?: string[]; deny?: string[] }) || {};
-  if (perms.allow?.length) ok(`permissions.allow: ${perms.allow.length} rules`);
-  else warn('No allow permissions');
-  if (perms.deny?.length) ok(`permissions.deny: ${perms.deny.length} rules`);
-  else warn('No deny permissions — destructive commands not blocked');
+  if (perms.allow?.length) {
+    ok(`permissions.allow: ${perms.allow.length} rules`);
+    detail(perms.allow);
+  } else warn('No allow permissions');
+  if (perms.deny?.length) {
+    ok(`permissions.deny: ${perms.deny.length} rules`);
+    detail(perms.deny);
+  } else warn('No deny permissions — destructive commands not blocked');
 
   const ep = settings?.enabledPlugins as Record<string, boolean> | undefined;
-  if (ep && Object.keys(ep).length > 0) ok(`${Object.keys(ep).length} plugins enabled`);
-  else warn('No plugins enabled');
+  const pluginNames = ep ? Object.keys(ep) : [];
+  if (pluginNames.length > 0) {
+    ok(`${pluginNames.length} plugins enabled`);
+    detail(pluginNames);
+  } else warn('No plugins enabled');
 
   if (settings?.extraKnownMarketplaces) ok('Marketplace configured');
   else warn('No marketplace configured');
@@ -596,6 +605,7 @@ export function runDoctor(opts: Opts = {}): void {
     const skills = fs.readdirSync(skillsDir, { withFileTypes: true }).filter(e => e.isDirectory());
     if (skills.length > 0) {
       ok(`${skills.length} user skills installed`);
+      detail(skills.map(s => s.name));
       let broken = 0;
       for (const s of skills) { if (!fs.existsSync(path.join(skillsDir, s.name, 'SKILL.md'))) { fail(`"${s.name}" missing SKILL.md`); broken++; } }
       if (broken === 0) ok('All skills have valid SKILL.md');
@@ -612,7 +622,13 @@ export function runDoctor(opts: Opts = {}): void {
 
   try {
     const backups = fs.readdirSync(CLAUDE_DIR).filter(f => f.includes('.bak.'));
-    if (backups.length > 5) warn(`${backups.length} backup files — consider cleanup`);
+    if (backups.length > 5) {
+      const totalKB = backups.reduce((sum, f) => {
+        try { return sum + fs.statSync(path.join(CLAUDE_DIR, f)).size; } catch { return sum; }
+      }, 0);
+      warn(`${backups.length} backup files (${Math.round(totalKB / 1024)}KB) in ~/.claude/ — run "rm ~/.claude/*.bak.*" to clean up`);
+      detail(backups);
+    }
   } catch {}
 
   console.log('');
