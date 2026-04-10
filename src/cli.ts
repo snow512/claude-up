@@ -3,6 +3,7 @@
 import { runInit, runProjectInit, runInstall, runClone, runBackup, runRestore, runStatus, runDoctor, runUpdate, runSessions, runResume, runUninstall } from './installer';
 import type { Opts } from './installer';
 import { renderBanner, C, style } from './ui';
+import { runLogin, runPush, runPull } from './sync';
 
 // --- Parse args ---
 
@@ -11,6 +12,7 @@ const flags = new Set(args.filter(a => a.startsWith('-') && !a.includes('=')));
 const command = args.find(a => !a.startsWith('-'))
   || (flags.has('--version') ? '--version' : flags.has('-h') || flags.has('--help') ? '--help' : undefined);
 const subcommand = args.filter(a => !a.startsWith('-'))[1];
+const restArgs = args.filter(a => !a.startsWith('-')).slice(1);
 
 const getFlag = (name: string): string | null => {
   const val = args.find(a => a.startsWith(`--${name}=`));
@@ -83,6 +85,14 @@ function showHelp(): void {
   console.log(`    ${style('uninstall', c)}         Remove oh-my-claude (skills, settings, CLAUDE.md)`);
   console.log(`      ${style('--yes, -y', g)}       Remove everything without asking\n`);
 
+  console.log(`  ${style('Sync', b)}`);
+  console.log(`    ${style('login', c)}             Set up GitHub token for cloud sync`);
+  console.log(`      ${style('--force, -f', g)}     Replace existing token`);
+  console.log(`    ${style('push', c)} [skills...]   Upload settings & skills to cloud`);
+  console.log(`      ${style('--yes, -y', g)}       Push without asking`);
+  console.log(`    ${style('pull', c)}              Download settings & skills from cloud`);
+  console.log(`      ${style('--yes, -y', g)}       Apply all without asking\n`);
+
   console.log(`  ${style('Global Options', b)}`);
   console.log(`    ${style('--help, -h', c)}        Show this help message`);
   console.log(`    ${style('--version', c)}         Show version\n`);
@@ -110,6 +120,9 @@ switch (command) {
   case 'sessions':     runSessions(opts); break;
   case 'resume':       runResume(subcommand, opts); break;
   case 'uninstall':    runUninstall(opts); break;
+  case 'login':        runLogin(opts); break;
+  case 'push':         runPush(restArgs.length > 0 ? restArgs : undefined, opts); break;
+  case 'pull':         runPull(opts); break;
   case '--version':    showVersion(); break;
   case '--help': case '-h': case undefined:
     showHelp(); break;

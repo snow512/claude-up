@@ -1,0 +1,436 @@
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.runLogin = runLogin;
+exports.runPush = runPush;
+exports.runPull = runPull;
+const fs = __importStar(require("fs"));
+const path = __importStar(require("path"));
+const https = __importStar(require("https"));
+const readline = __importStar(require("readline"));
+const installer_1 = require("./installer");
+const ui_1 = require("./ui");
+// --- Constants ---
+const AUTH_PATH = path.join(installer_1.CLAUDE_DIR, '.omc-auth');
+const GIST_PREFIX = 'omc-skill--';
+const MANIFEST_FILE = 'omc-manifest.json';
+const SETTINGS_FILE = 'omc-settings.json';
+const CLAUDE_MD_FILE = 'omc-claude-md.md';
+// --- Auth helpers ---
+function loadAuth() {
+    try {
+        const raw = fs.readFileSync(AUTH_PATH, 'utf-8');
+        return JSON.parse(raw);
+    }
+    catch {
+        return null;
+    }
+}
+function saveAuth(data) {
+    fs.mkdirSync(path.dirname(AUTH_PATH), { recursive: true });
+    fs.writeFileSync(AUTH_PATH, JSON.stringify(data, null, 2) + '\n');
+    fs.chmodSync(AUTH_PATH, 0o600);
+}
+// --- GitHub API client ---
+function githubApi(method, endpoint, token, body) {
+    return new Promise((resolve, reject) => {
+        const payload = body ? JSON.stringify(body) : undefined;
+        const options = {
+            hostname: 'api.github.com',
+            path: endpoint,
+            method,
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'User-Agent': 'oh-my-claude',
+                'X-GitHub-Api-Version': '2022-11-28',
+                'Accept': 'application/vnd.github+json',
+                'Content-Type': 'application/json',
+                ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {}),
+            },
+        };
+        const req = https.request(options, (res) => {
+            let data = '';
+            res.on('data', (chunk) => { data += chunk; });
+            res.on('end', () => {
+                const statusCode = res.statusCode ?? 0;
+                if (statusCode >= 200 && statusCode < 300) {
+                    try {
+                        resolve(JSON.parse(data));
+                    }
+                    catch {
+                        reject(new Error(`Failed to parse response: ${data}`));
+                    }
+                }
+                else {
+                    reject(new Error(`GitHub API error ${statusCode}: ${data}`));
+                }
+            });
+        });
+        req.on('error', reject);
+        if (payload)
+            req.write(payload);
+        req.end();
+    });
+}
+// --- Language detection ---
+function detectLang() {
+    try {
+        const skillsDir = path.join(installer_1.CLAUDE_DIR, 'skills');
+        const entries = fs.readdirSync(skillsDir, { withFileTypes: true });
+        const firstDir = entries.find(e => e.isDirectory());
+        if (!firstDir)
+            return 'en';
+        const skillMd = path.join(skillsDir, firstDir.name, 'SKILL.md');
+        const content = fs.readFileSync(skillMd, 'utf-8');
+        // Check for Korean characters (Hangul Unicode range)
+        if (/[\uAC00-\uD7A3\u1100-\u11FF\u3130-\u318F]/.test(content))
+            return 'ko';
+        return 'en';
+    }
+    catch {
+        return 'en';
+    }
+}
+// --- Backup helper ---
+function backup(filePath) {
+    try {
+        const ts = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
+        const bakPath = `${filePath}.bak.${ts}`;
+        fs.copyFileSync(filePath, bakPath);
+        return bakPath;
+    }
+    catch {
+        return null;
+    }
+}
+// --- Manifest building ---
+function buildManifest() {
+    const repoSkillsDir = path.join(installer_1.PACKAGE_ROOT, 'user-skills');
+    const localSkillsDir = path.join(installer_1.CLAUDE_DIR, 'skills');
+    // Get skill names from repo
+    let repoSkills = [];
+    try {
+        repoSkills = fs.readdirSync(repoSkillsDir, { withFileTypes: true })
+            .filter(e => e.isDirectory())
+            .map(e => e.name);
+    }
+    catch { /* no repo skills dir */ }
+    // Get skill names from local
+    let localSkills = [];
+    try {
+        localSkills = fs.readdirSync(localSkillsDir, { withFileTypes: true })
+            .filter(e => e.isDirectory())
+            .map(e => e.name);
+    }
+    catch { /* no local skills dir */ }
+    const repoSet = new Set(repoSkills);
+    const localSet = new Set(localSkills);
+    const installed = [];
+    const removed = [];
+    const modified = [];
+    const custom = [];
+    const modifiedFiles = {};
+    // Skills in repo
+    for (const name of repoSkills) {
+        const repoDir = path.join(repoSkillsDir, name);
+        const localDir = path.join(localSkillsDir, name);
+        if (!localSet.has(name)) {
+            // In repo but not local => removed
+            removed.push(name);
+        }
+        else if ((0, installer_1.isDirChanged)(repoDir, localDir)) {
+            // In both but changed => modified
+            modified.push(name);
+            try {
+                const content = fs.readFileSync(path.join(localDir, 'SKILL.md'), 'utf-8');
+                modifiedFiles[`${GIST_PREFIX}${name}.md`] = content;
+            }
+            catch { /* skip if unreadable */ }
+        }
+        else {
+            // Unchanged
+            installed.push(name);
+        }
+    }
+    // Skills only in local (custom)
+    for (const name of localSkills) {
+        if (!repoSet.has(name)) {
+            custom.push(name);
+            try {
+                const content = fs.readFileSync(path.join(localSkillsDir, name, 'SKILL.md'), 'utf-8');
+                modifiedFiles[`${GIST_PREFIX}${name}.md`] = content;
+            }
+            catch { /* skip if unreadable */ }
+        }
+    }
+    const lang = detectLang();
+    const manifest = {
+        version: '1',
+        timestamp: new Date().toISOString(),
+        skills: { installed, removed, modified, custom },
+        lang,
+    };
+    return { manifest, modifiedFiles };
+}
+// --- Extract CLAUDE.md omc block ---
+function extractOmcBlock(claudeMdPath) {
+    try {
+        const content = fs.readFileSync(claudeMdPath, 'utf-8');
+        const start = content.indexOf('<!-- omc:start -->');
+        const end = content.indexOf('<!-- omc:end -->');
+        if (start === -1 || end === -1)
+            return null;
+        return content.slice(start, end + '<!-- omc:end -->'.length);
+    }
+    catch {
+        return null;
+    }
+}
+// --- Apply omc block to CLAUDE.md ---
+function applyOmcBlock(claudeMdPath, block) {
+    let content = '';
+    try {
+        content = fs.readFileSync(claudeMdPath, 'utf-8');
+    }
+    catch { /* new file */ }
+    const start = content.indexOf('<!-- omc:start -->');
+    const end = content.indexOf('<!-- omc:end -->');
+    if (start !== -1 && end !== -1) {
+        content = content.slice(0, start) + block + content.slice(end + '<!-- omc:end -->'.length);
+    }
+    else {
+        content = content + '\n\n' + block + '\n';
+    }
+    fs.mkdirSync(path.dirname(claudeMdPath), { recursive: true });
+    fs.writeFileSync(claudeMdPath, content);
+}
+// --- Login command ---
+async function runLogin(opts) {
+    (0, ui_1.renderBanner)();
+    const existing = loadAuth();
+    if (existing && !opts.force) {
+        const masked = existing.token.slice(0, 4) + '****' + existing.token.slice(-4);
+        console.log(`  ${(0, ui_1.style)('Current token:', ui_1.C.bold)} ${(0, ui_1.style)(masked, ui_1.C.gray)}`);
+        const replace = await (0, ui_1.ask)('Replace existing token?', false);
+        if (!replace) {
+            console.log(`  ${(0, ui_1.style)('Login unchanged.', ui_1.C.gray)}\n`);
+            return;
+        }
+    }
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    const token = await new Promise((resolve) => {
+        rl.question(`  ${(0, ui_1.style)('GitHub Personal Access Token', ui_1.C.bold)} (needs gist scope): `, (answer) => {
+            rl.close();
+            resolve(answer.trim());
+        });
+    });
+    if (!token) {
+        console.log(`  ${(0, ui_1.style)('✗', ui_1.C.red)} No token provided.\n`);
+        process.exit(1);
+    }
+    await (0, ui_1.progressLine)('Validating token', async () => {
+        const user = await githubApi('GET', '/user', token);
+        console.log(''); // newline after spinner clears
+        console.log(`  ${(0, ui_1.style)('✓', ui_1.C.green)} Authenticated as ${(0, ui_1.style)(user.login, ui_1.C.cyan)}`);
+    });
+    const auth = { token };
+    const currentAuth = loadAuth();
+    if (currentAuth?.gistId)
+        auth.gistId = currentAuth.gistId;
+    saveAuth(auth);
+    console.log(`  ${(0, ui_1.style)('✓', ui_1.C.green)} Token saved.\n`);
+}
+// --- Push command ---
+async function runPush(args, opts) {
+    (0, ui_1.renderBanner)();
+    const auth = loadAuth();
+    if (!auth) {
+        console.log(`  ${(0, ui_1.style)('✗', ui_1.C.red)} Not logged in. Run: ${(0, ui_1.style)('omc login', ui_1.C.cyan)}\n`);
+        process.exit(1);
+    }
+    const { manifest, modifiedFiles } = await (0, ui_1.progressLine)('Analyzing skills', () => buildManifest());
+    // Filter by specific skill names if provided
+    const filter = (args && args.length > 0) ? new Set(args) : null;
+    const skillsToInclude = filter
+        ? [...manifest.skills.modified, ...manifest.skills.custom].filter(n => filter.has(n))
+        : [...manifest.skills.modified, ...manifest.skills.custom];
+    const removedToInclude = filter
+        ? manifest.skills.removed.filter(n => filter.has(n))
+        : manifest.skills.removed;
+    const totalChanges = skillsToInclude.length + removedToInclude.length;
+    // Show summary
+    console.log('');
+    console.log(`  ${(0, ui_1.style)('Skills summary:', ui_1.C.bold)}`);
+    console.log(`    ${(0, ui_1.style)('Unchanged:', ui_1.C.gray)}  ${manifest.skills.installed.length}`);
+    console.log(`    ${(0, ui_1.style)('Modified:', ui_1.C.yellow)}  ${manifest.skills.modified.length}`);
+    console.log(`    ${(0, ui_1.style)('Removed:', ui_1.C.red)}   ${manifest.skills.removed.length}`);
+    console.log(`    ${(0, ui_1.style)('Custom:', ui_1.C.cyan)}    ${manifest.skills.custom.length}`);
+    console.log('');
+    if (totalChanges === 0 && !opts.force) {
+        console.log(`  ${(0, ui_1.style)('Nothing to push.', ui_1.C.gray)}\n`);
+        return;
+    }
+    // Build gist files
+    const settingsPath = path.join(installer_1.CLAUDE_DIR, 'settings.json');
+    const rawSettings = (0, installer_1.readJson)(settingsPath) || {};
+    const syncSettings = {};
+    for (const key of ['permissions', 'enabledPlugins', 'extraKnownMarketplaces']) {
+        if (rawSettings[key] !== undefined)
+            syncSettings[key] = rawSettings[key];
+    }
+    const claudeMdPath = path.join(installer_1.CLAUDE_DIR, 'CLAUDE.md');
+    const omcBlock = extractOmcBlock(claudeMdPath);
+    const gistFiles = {
+        [MANIFEST_FILE]: { content: JSON.stringify(manifest, null, 2) },
+        [SETTINGS_FILE]: { content: JSON.stringify(syncSettings, null, 2) },
+    };
+    if (omcBlock) {
+        gistFiles[CLAUDE_MD_FILE] = { content: omcBlock };
+    }
+    // Include modified/custom skill files
+    for (const skillName of skillsToInclude) {
+        const key = `${GIST_PREFIX}${skillName}.md`;
+        if (modifiedFiles[key]) {
+            gistFiles[key] = { content: modifiedFiles[key] };
+        }
+    }
+    // Mark removed skills as null in existing gist (delete from gist)
+    for (const skillName of removedToInclude) {
+        gistFiles[`${GIST_PREFIX}${skillName}.md`] = null;
+    }
+    const payload = {
+        description: 'oh-my-claude settings sync',
+        public: false,
+        files: gistFiles,
+    };
+    let gistUrl;
+    if (auth.gistId) {
+        const result = await (0, ui_1.progressLine)('Updating Gist', () => githubApi('PATCH', `/gists/${auth.gistId}`, auth.token, payload));
+        gistUrl = result.html_url;
+    }
+    else {
+        const result = await (0, ui_1.progressLine)('Creating Gist', () => githubApi('POST', '/gists', auth.token, payload));
+        gistUrl = result.html_url;
+        auth.gistId = result.id;
+        saveAuth(auth);
+    }
+    console.log(`  ${(0, ui_1.style)('✓', ui_1.C.green)} Pushed to Gist: ${(0, ui_1.style)(gistUrl, ui_1.C.cyan)}\n`);
+}
+// --- Pull command ---
+async function runPull(opts) {
+    (0, ui_1.renderBanner)();
+    const auth = loadAuth();
+    if (!auth) {
+        console.log(`  ${(0, ui_1.style)('✗', ui_1.C.red)} Not logged in. Run: ${(0, ui_1.style)('omc login', ui_1.C.cyan)}\n`);
+        process.exit(1);
+    }
+    if (!auth.gistId) {
+        console.log(`  ${(0, ui_1.style)('✗', ui_1.C.red)} No Gist ID found. Run: ${(0, ui_1.style)('omc push', ui_1.C.cyan)} first.\n`);
+        process.exit(1);
+    }
+    const gistData = await (0, ui_1.progressLine)('Fetching Gist', () => githubApi('GET', `/gists/${auth.gistId}`, auth.token));
+    // Parse manifest
+    const manifestFile = gistData.files[MANIFEST_FILE];
+    if (!manifestFile) {
+        console.log(`  ${(0, ui_1.style)('✗', ui_1.C.red)} No manifest found in Gist.\n`);
+        process.exit(1);
+    }
+    const manifest = JSON.parse(manifestFile.content);
+    console.log('');
+    console.log(`  ${(0, ui_1.style)('Remote manifest:', ui_1.C.bold)} ${(0, ui_1.style)(manifest.timestamp, ui_1.C.gray)}`);
+    console.log(`    ${(0, ui_1.style)('Modified:', ui_1.C.yellow)}  ${manifest.skills.modified.length}`);
+    console.log(`    ${(0, ui_1.style)('Removed:', ui_1.C.red)}   ${manifest.skills.removed.length}`);
+    console.log(`    ${(0, ui_1.style)('Custom:', ui_1.C.cyan)}    ${manifest.skills.custom.length}`);
+    console.log('');
+    // Apply settings (merge: remote keys overwrite, local-only keys preserved)
+    const settingsFile = gistData.files[SETTINGS_FILE];
+    if (settingsFile) {
+        const doIt = opts.yes || await (0, ui_1.ask)('Apply settings?', true);
+        if (doIt) {
+            const settingsPath = path.join(installer_1.CLAUDE_DIR, 'settings.json');
+            const localSettings = (0, installer_1.readJson)(settingsPath) || {};
+            const remoteSettings = JSON.parse(settingsFile.content);
+            // Backup first
+            if (fs.existsSync(settingsPath)) {
+                backup(settingsPath);
+            }
+            // Merge: remote keys overwrite, local-only keys preserved
+            const merged = { ...localSettings, ...remoteSettings };
+            (0, installer_1.writeJson)(settingsPath, merged);
+            console.log(`  ${(0, ui_1.style)('✓', ui_1.C.green)} Settings applied.`);
+        }
+    }
+    // Apply CLAUDE.md omc block
+    const claudeMdFile = gistData.files[CLAUDE_MD_FILE];
+    if (claudeMdFile) {
+        const doIt = opts.yes || await (0, ui_1.ask)('Apply CLAUDE.md omc block?', true);
+        if (doIt) {
+            const claudeMdPath = path.join(installer_1.CLAUDE_DIR, 'CLAUDE.md');
+            if (fs.existsSync(claudeMdPath))
+                backup(claudeMdPath);
+            applyOmcBlock(claudeMdPath, claudeMdFile.content);
+            console.log(`  ${(0, ui_1.style)('✓', ui_1.C.green)} CLAUDE.md omc block applied.`);
+        }
+    }
+    // Apply removed skills (delete local)
+    const localSkillsDir = path.join(installer_1.CLAUDE_DIR, 'skills');
+    for (const name of manifest.skills.removed) {
+        const localDir = path.join(localSkillsDir, name);
+        if (!fs.existsSync(localDir))
+            continue;
+        const doIt = opts.yes || await (0, ui_1.ask)(`Delete removed skill: ${(0, ui_1.style)(name, ui_1.C.yellow)}?`, true);
+        if (doIt) {
+            fs.rmSync(localDir, { recursive: true, force: true });
+            console.log(`  ${(0, ui_1.style)('✓', ui_1.C.green)} Removed skill: ${(0, ui_1.style)(name, ui_1.C.gray)}`);
+        }
+    }
+    // Apply modified and custom skills (write SKILL.md)
+    const toWrite = [...manifest.skills.modified, ...manifest.skills.custom];
+    for (const name of toWrite) {
+        const key = `${GIST_PREFIX}${name}.md`;
+        const remoteFile = gistData.files[key];
+        if (!remoteFile)
+            continue;
+        const skillDir = path.join(localSkillsDir, name);
+        const skillMdPath = path.join(skillDir, 'SKILL.md');
+        const doIt = opts.yes || await (0, ui_1.ask)(`Apply skill: ${(0, ui_1.style)(name, name.includes('-') ? ui_1.C.cyan : ui_1.C.yellow)}?`, true);
+        if (doIt) {
+            fs.mkdirSync(skillDir, { recursive: true });
+            fs.writeFileSync(skillMdPath, remoteFile.content);
+            console.log(`  ${(0, ui_1.style)('✓', ui_1.C.green)} Applied skill: ${(0, ui_1.style)(name, ui_1.C.gray)}`);
+        }
+    }
+    console.log(`\n  ${(0, ui_1.style)('Pull complete.', ui_1.C.green)}\n`);
+}
