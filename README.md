@@ -22,8 +22,8 @@ That's it. Answer one question (`Use defaults? [Y/n]`) and everything is configu
 
 | What you type | What runs |
 |---|---|
-| `클로드초기설정해` / `setup` | `/claude-init` → `omc init` |
-| `프로젝트초기설정해` / `project setup` | `/project-init` → `omc project-init` |
+| `setup` | `/claude-init` → `omc init` |
+| `project setup` | `/project-init` → `omc project-init` |
 
 ---
 
@@ -146,7 +146,7 @@ CLI (bin/cli.js → installer.js) reads presets + copies skills
     ↓
 ~/.claude/settings.json + ~/.claude/skills/ updated
 
-Claude session: "클로드초기설정해"
+Claude session: "claude setup"
     ↓
 Plugin command: /claude-init
     ↓
