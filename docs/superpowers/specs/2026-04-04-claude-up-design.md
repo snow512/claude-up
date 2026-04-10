@@ -1,9 +1,9 @@
-# oh-my-claude Design Spec
+# claude-up Design Spec
 
 ## Overview
 
 An **npm CLI + Claude plugin hybrid** that bootstraps and manages Claude Code environments.
-Run `npx oh-my-claude init` once on a new machine to replicate an identical Claude Code environment.
+Run `npx claude-up init` once on a new machine to replicate an identical Claude Code environment.
 Inside a Claude session, use `/claude-init` or `/project-init` for the same functionality.
 
 ## Architecture: Hybrid (npm CLI + Claude Plugin)
@@ -12,17 +12,17 @@ Inside a Claude session, use `/claude-init` or `/project-init` for the same func
 
 | Entry Point | When to Use | How to Run |
 |-------------|------------|------------|
-| **npm CLI** | New machine, without Claude Code | `npx oh-my-claude init` |
+| **npm CLI** | New machine, without Claude Code | `npx claude-up init` |
 | **Claude plugin** | Inside a Claude session | `/claude-init` (or Korean triggers) |
 
-Plugin commands are thin wrappers that call `npx oh-my-claude <command>`.
+Plugin commands are thin wrappers that call `npx claude-up <command>`.
 All logic lives in `bin/` — no code duplication.
 
 ## Project Structure
 
 ```
-oh-my-claude/
-├── package.json                          # npm package (bin: oh-my-claude, omc)
+claude-up/
+├── package.json                          # npm package (bin: claude-up, cup)
 ├── plugin.json                           # Claude plugin manifest
 ├── README.md
 ├── bin/
@@ -48,20 +48,20 @@ oh-my-claude/
 ## CLI Commands
 
 ```bash
-omc init                  # Interactive setup (permissions, plugins, skills, statusline)
-omc install <target>      # Install individual component (skills|plugins|permissions|statusline|all)
-omc project-init          # Project-level permissions
-omc update                # Check & apply updates
-omc sessions              # List sessions
-omc resume [id]           # Resume a session
-omc status                # Environment summary
-omc doctor                # Diagnose issues
-omc clone                 # Export environment
-omc backup                # Snapshot to .tar.gz
-omc restore <file>        # Restore from backup
+cup init                  # Interactive setup (permissions, plugins, skills, statusline)
+cup install <target>      # Install individual component (skills|plugins|permissions|statusline|all)
+cup project-init          # Project-level permissions
+cup update                # Check & apply updates
+cup sessions              # List sessions
+cup resume [id]           # Resume a session
+cup status                # Environment summary
+cup doctor                # Diagnose issues
+cup clone                 # Export environment
+cup backup                # Snapshot to .tar.gz
+cup restore <file>        # Restore from backup
 ```
 
-Alias: `oh-my-claude` = `omc`
+Alias: `claude-up` = `cup`
 
 ## Presets
 

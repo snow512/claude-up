@@ -1,5 +1,5 @@
 
-<!-- <omc> — managed by claude-up, do not edit manually -->
+<!-- <cup> — managed by claude-up, do not edit manually -->
 
 ## claude-up Skills
 
@@ -34,4 +34,4 @@ Skills store per-project memory in `.claude/settings.local.json`:
 - Include `Co-Authored-By: Claude <noreply@anthropic.com>`
 - Follow the language of existing commit log
 
-<!-- </omc> -->
+<!-- </cup> -->
