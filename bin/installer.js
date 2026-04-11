@@ -105,7 +105,7 @@ async function runInit(opts = {}) {
         }
         (0, ui_1.renderSummary)(results);
     }
-    (0, ui_1.renderDone)();
+    (0, ui_1.renderDone)(providers.map(p => p.name));
 }
 // --- Install ---
 async function runInstall(target, opts = {}) {

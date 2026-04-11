@@ -1,22 +1,17 @@
 import { Provider, ProviderName } from './types';
 import { ClaudeProvider } from './claude';
+import { GeminiProvider } from './gemini';
+import { CodexProvider } from './codex';
 
 const ALL_PROVIDERS: Record<ProviderName, () => Provider> = {
   claude: () => new ClaudeProvider(),
-  // gemini: () => new GeminiProvider(),  // Phase 2
-  // codex: () => new CodexProvider(),    // Phase 3
-  gemini: undefined as unknown as () => Provider,
-  codex: undefined as unknown as () => Provider,
-};
-
-const AVAILABLE_PROVIDERS: Partial<Record<ProviderName, () => Provider>> = {
-  claude: ALL_PROVIDERS.claude,
+  gemini: () => new GeminiProvider(),
+  codex:  () => new CodexProvider(),
 };
 
 /** Detect all installed providers */
 export function detectProviders(): Provider[] {
-  return Object.values(AVAILABLE_PROVIDERS)
-    .filter((factory): factory is () => Provider => !!factory)
+  return Object.values(ALL_PROVIDERS)
     .map(factory => factory())
     .filter(p => p.isInstalled());
 }
@@ -27,10 +22,10 @@ export function resolveProviders(providerFlag?: string): Provider[] {
 
   const names = providerFlag.split(',').map(s => s.trim()) as ProviderName[];
   return names.map(name => {
-    const factory = AVAILABLE_PROVIDERS[name];
+    const factory = ALL_PROVIDERS[name];
     if (!factory) {
-      const valid = Object.keys(AVAILABLE_PROVIDERS).join(', ');
-      throw new Error(`Unknown or unavailable provider: ${name}. Available: ${valid}`);
+      const valid = Object.keys(ALL_PROVIDERS).join(', ');
+      throw new Error(`Unknown provider: ${name}. Available: ${valid}`);
     }
     return factory();
   });
@@ -38,7 +33,5 @@ export function resolveProviders(providerFlag?: string): Provider[] {
 
 /** Get a specific provider by name */
 export function getProvider(name: ProviderName): Provider {
-  const factory = AVAILABLE_PROVIDERS[name];
-  if (!factory) throw new Error(`Provider not available: ${name}`);
-  return factory();
+  return ALL_PROVIDERS[name]();
 }

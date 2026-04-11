@@ -90,7 +90,7 @@ export async function runInit(opts: Opts = {}): Promise<void> {
     renderSummary(results);
   }
 
-  renderDone();
+  renderDone(providers.map(p => p.name));
 }
 
 // --- Install ---

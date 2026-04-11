@@ -4,20 +4,16 @@ exports.detectProviders = detectProviders;
 exports.resolveProviders = resolveProviders;
 exports.getProvider = getProvider;
 const claude_1 = require("./claude");
+const gemini_1 = require("./gemini");
+const codex_1 = require("./codex");
 const ALL_PROVIDERS = {
     claude: () => new claude_1.ClaudeProvider(),
-    // gemini: () => new GeminiProvider(),  // Phase 2
-    // codex: () => new CodexProvider(),    // Phase 3
-    gemini: undefined,
-    codex: undefined,
-};
-const AVAILABLE_PROVIDERS = {
-    claude: ALL_PROVIDERS.claude,
+    gemini: () => new gemini_1.GeminiProvider(),
+    codex: () => new codex_1.CodexProvider(),
 };
 /** Detect all installed providers */
 function detectProviders() {
-    return Object.values(AVAILABLE_PROVIDERS)
-        .filter((factory) => !!factory)
+    return Object.values(ALL_PROVIDERS)
         .map(factory => factory())
         .filter(p => p.isInstalled());
 }
@@ -27,18 +23,15 @@ function resolveProviders(providerFlag) {
         return detectProviders();
     const names = providerFlag.split(',').map(s => s.trim());
     return names.map(name => {
-        const factory = AVAILABLE_PROVIDERS[name];
+        const factory = ALL_PROVIDERS[name];
         if (!factory) {
-            const valid = Object.keys(AVAILABLE_PROVIDERS).join(', ');
-            throw new Error(`Unknown or unavailable provider: ${name}. Available: ${valid}`);
+            const valid = Object.keys(ALL_PROVIDERS).join(', ');
+            throw new Error(`Unknown provider: ${name}. Available: ${valid}`);
         }
         return factory();
     });
 }
 /** Get a specific provider by name */
 function getProvider(name) {
-    const factory = AVAILABLE_PROVIDERS[name];
-    if (!factory)
-        throw new Error(`Provider not available: ${name}`);
-    return factory();
+    return ALL_PROVIDERS[name]();
 }
