@@ -4,6 +4,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const installer_1 = require("./installer");
 const ui_1 = require("./ui");
 const sync_1 = require("./sync");
+const security_1 = require("./security");
 // --- Parse args ---
 const args = process.argv.slice(2);
 const flags = new Set(args.filter(a => a.startsWith('-') && !a.includes('=')));
@@ -27,6 +28,7 @@ const opts = {
     project: getFlag('project') || undefined,
     limit: parseInt(getFlag('limit') || '10', 10),
     provider: getFlag('provider') || undefined,
+    level: getFlag('level') || undefined,
 };
 // --- Help ---
 function showHelp() {
@@ -80,6 +82,13 @@ function showHelp() {
     console.log(`      ${(0, ui_1.style)('--yes, -y', g)}       Push without asking`);
     console.log(`    ${(0, ui_1.style)('pull', c)}              Download settings & skills from cloud`);
     console.log(`      ${(0, ui_1.style)('--yes, -y', g)}       Apply all without asking\n`);
+    console.log(`  ${(0, ui_1.style)('Security', b)}`);
+    console.log(`    ${(0, ui_1.style)('security', c)}          Show security subcommand help`);
+    console.log(`    ${(0, ui_1.style)('security init', c)}     Apply a security level (deny rules + guidance block)`);
+    console.log(`      ${(0, ui_1.style)('--level=<level>', g)} loose | normal | strict (default: normal)`);
+    console.log(`    ${(0, ui_1.style)('security check', c)}    Audit current security posture`);
+    console.log(`    ${(0, ui_1.style)('security diff', c)}     Compare current vs target level`);
+    console.log(`      ${(0, ui_1.style)('--level=<level>', g)} Target level to compare against\n`);
     console.log(`  ${(0, ui_1.style)('Global Options', b)}`);
     console.log(`    ${(0, ui_1.style)('--provider=<name>', c)}  Target provider (claude,gemini,codex; auto-detect if omitted)`);
     console.log(`    ${(0, ui_1.style)('--help, -h', c)}        Show this help message`);
@@ -136,6 +145,9 @@ switch (command) {
         break;
     case 'pull':
         (0, sync_1.runPull)(opts);
+        break;
+    case 'security':
+        (0, security_1.runSecurity)(subcommand, opts);
         break;
     case '--version':
         showVersion();

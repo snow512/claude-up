@@ -73,7 +73,26 @@ cup uninstall [--provider=...] [--yes]
 cup login [--force]
 cup push [skills...] [--yes]
 cup pull [--provider=...] [--yes]
+
+# Security
+cup security                                           # Show security help
+cup security init [--level=loose|normal|strict] [--provider=...] [--yes]
+cup security check [--provider=...] [--verbose]
+cup security diff [--level=...] [--provider=...]
 ```
+
+## Security Levels
+
+`cup security init`로 보안 레벨을 한 번에 설정할 수 있습니다 (기본 `normal`).
+`cup init` 실행 시에도 자동으로 normal 레벨이 적용됩니다.
+
+| Level | 용도 |
+|-------|------|
+| `loose` | 빠른 실험, 토이 프로젝트 |
+| `normal` | 일반 개발 (default) |
+| `strict` | 프로덕션 코드, 팀 협업 |
+
+`cup security check`로 현재 보안 상태를 점검할 수 있습니다.
 
 ## Provider Auto-Detection
 

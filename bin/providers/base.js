@@ -33,11 +33,14 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.CUP_END = exports.CUP_START = void 0;
+exports.CUP_SECURITY_END = exports.CUP_SECURITY_START = exports.CUP_END = exports.CUP_START = void 0;
 exports.buildSkillContent = buildSkillContent;
 exports.getAvailableSkillsFromRepo = getAvailableSkillsFromRepo;
 exports.readCupBlockFromFile = readCupBlockFromFile;
 exports.writeCupBlockToFile = writeCupBlockToFile;
+exports.readSecurityBlockFromFile = readSecurityBlockFromFile;
+exports.writeSecurityBlockToFile = writeSecurityBlockToFile;
+exports.removeSecurityBlockFromFile = removeSecurityBlockFromFile;
 exports.listSimpleSessions = listSimpleSessions;
 exports.readSkillBody = readSkillBody;
 exports.installSkillWithMeta = installSkillWithMeta;
@@ -47,6 +50,8 @@ const utils_1 = require("../utils");
 // --- Shared constants ---
 exports.CUP_START = '<!-- <cup>';
 exports.CUP_END = '<!-- </cup> -->';
+exports.CUP_SECURITY_START = '<!-- <cup-security>';
+exports.CUP_SECURITY_END = '<!-- </cup-security> -->';
 // --- Shared helpers ---
 /** Build a SKILL.md content by prepending YAML frontmatter from meta to the body. */
 function buildSkillContent(body, meta) {
@@ -118,6 +123,56 @@ function writeCupBlockToFile(filePath, block) {
     }
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
     fs.writeFileSync(filePath, content);
+}
+/** Read the cup-security block from an instruction file. */
+function readSecurityBlockFromFile(filePath) {
+    try {
+        const content = fs.readFileSync(filePath, 'utf-8');
+        const start = content.indexOf(exports.CUP_SECURITY_START);
+        const end = content.indexOf(exports.CUP_SECURITY_END);
+        if (start === -1 || end === -1)
+            return null;
+        return content.slice(start, end + exports.CUP_SECURITY_END.length);
+    }
+    catch {
+        return null;
+    }
+}
+/** Insert or replace the cup-security block in an instruction file. */
+function writeSecurityBlockToFile(filePath, block) {
+    let content = '';
+    try {
+        content = fs.readFileSync(filePath, 'utf-8');
+    }
+    catch { }
+    const start = content.indexOf(exports.CUP_SECURITY_START);
+    const end = content.indexOf(exports.CUP_SECURITY_END);
+    if (start !== -1 && end !== -1) {
+        content = content.slice(0, start) + block + content.slice(end + exports.CUP_SECURITY_END.length);
+    }
+    else {
+        content = content ? content.trimEnd() + '\n\n' + block + '\n' : block + '\n';
+    }
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, content);
+}
+/** Remove the cup-security block from an instruction file (keeps the rest). */
+function removeSecurityBlockFromFile(filePath) {
+    let content;
+    try {
+        content = fs.readFileSync(filePath, 'utf-8');
+    }
+    catch {
+        return;
+    }
+    const start = content.indexOf(exports.CUP_SECURITY_START);
+    const end = content.indexOf(exports.CUP_SECURITY_END);
+    if (start === -1 || end === -1)
+        return;
+    const cleaned = (content.slice(0, start) + content.slice(end + exports.CUP_SECURITY_END.length))
+        .replace(/\n{3,}/g, '\n\n')
+        .trimEnd() + '\n';
+    fs.writeFileSync(filePath, cleaned);
 }
 /** List simple file-based sessions from a directory (best-effort for Gemini/Codex). */
 function listSimpleSessions(historyDir, projectLabel, extensions, firstMessage, opts) {

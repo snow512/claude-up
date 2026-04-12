@@ -340,5 +340,21 @@ class GeminiProvider {
     getAvailableSkillsFromRepo() {
         return (0, base_1.getAvailableSkillsFromRepo)(this.name);
     }
+    // --- Security ---
+    applySecurityLevel(config) {
+        const geminiConfig = config.providers.gemini;
+        if (!geminiConfig?.policies)
+            return;
+        this.writePolicies(geminiConfig.policies);
+    }
+    readSecurityBlock() {
+        return (0, base_1.readSecurityBlockFromFile)(this.getInstructionFilePath('global'));
+    }
+    writeSecurityBlock(content) {
+        (0, base_1.writeSecurityBlockToFile)(this.getInstructionFilePath('global'), content);
+    }
+    removeSecurityBlock() {
+        (0, base_1.removeSecurityBlockFromFile)(this.getInstructionFilePath('global'));
+    }
 }
 exports.GeminiProvider = GeminiProvider;

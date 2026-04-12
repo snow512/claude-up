@@ -9,6 +9,9 @@ import type { ProviderName, SessionInfo, SessionOpts } from './types';
 export const CUP_START = '<!-- <cup>';
 export const CUP_END = '<!-- </cup> -->';
 
+export const CUP_SECURITY_START = '<!-- <cup-security>';
+export const CUP_SECURITY_END = '<!-- </cup-security> -->';
+
 // --- Shared helpers ---
 
 /** Build a SKILL.md content by prepending YAML frontmatter from meta to the body. */
@@ -72,6 +75,51 @@ export function writeCupBlockToFile(filePath: string, block: string): void {
 
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, content);
+}
+
+/** Read the cup-security block from an instruction file. */
+export function readSecurityBlockFromFile(filePath: string): string | null {
+  try {
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const start = content.indexOf(CUP_SECURITY_START);
+    const end = content.indexOf(CUP_SECURITY_END);
+    if (start === -1 || end === -1) return null;
+    return content.slice(start, end + CUP_SECURITY_END.length);
+  } catch { return null; }
+}
+
+/** Insert or replace the cup-security block in an instruction file. */
+export function writeSecurityBlockToFile(filePath: string, block: string): void {
+  let content = '';
+  try { content = fs.readFileSync(filePath, 'utf-8'); } catch {}
+
+  const start = content.indexOf(CUP_SECURITY_START);
+  const end = content.indexOf(CUP_SECURITY_END);
+
+  if (start !== -1 && end !== -1) {
+    content = content.slice(0, start) + block + content.slice(end + CUP_SECURITY_END.length);
+  } else {
+    content = content ? content.trimEnd() + '\n\n' + block + '\n' : block + '\n';
+  }
+
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, content);
+}
+
+/** Remove the cup-security block from an instruction file (keeps the rest). */
+export function removeSecurityBlockFromFile(filePath: string): void {
+  let content: string;
+  try { content = fs.readFileSync(filePath, 'utf-8'); } catch { return; }
+
+  const start = content.indexOf(CUP_SECURITY_START);
+  const end = content.indexOf(CUP_SECURITY_END);
+  if (start === -1 || end === -1) return;
+
+  const cleaned = (content.slice(0, start) + content.slice(end + CUP_SECURITY_END.length))
+    .replace(/\n{3,}/g, '\n\n')
+    .trimEnd() + '\n';
+
+  fs.writeFileSync(filePath, cleaned);
 }
 
 /** List simple file-based sessions from a directory (best-effort for Gemini/Codex). */

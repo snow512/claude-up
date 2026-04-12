@@ -7,7 +7,7 @@ import type { SummaryResult, CheckboxItem } from './ui';
 import { readJson, writeJson, copyDirRecursive, isDirChanged, backup, timestamp, parseSimpleYaml, PACKAGE_ROOT } from './utils';
 import { resolveProviders, getProvider } from './providers/registry';
 import { ClaudeProvider } from './providers/claude';
-import type { Provider } from './providers/types';
+import type { Provider, SecurityLevelConfig } from './providers/types';
 
 // --- Types ---
 
@@ -23,6 +23,7 @@ export interface Opts {
   project?: string;
   limit?: number;
   provider?: string;
+  level?: string;
 }
 
 interface CloneItem {
@@ -79,18 +80,49 @@ export async function runInit(opts: Opts = {}): Promise<void> {
     if (bakPath) console.log(`\n  ${style('💾', C.gray)} ${style('Backup: ' + bakPath, C.gray)}`);
 
     const steps = provider.getInitSteps();
+    const totalSteps = steps.length + 1; // +1 for security step
     const results: SummaryResult[] = [];
 
     for (let i = 0; i < steps.length; i++) {
-      renderStep(i + 1, steps.length, steps[i].label);
+      renderStep(i + 1, totalSteps, steps[i].label);
       const result = await steps[i].execute(useDefaults, lang);
       results.push({ ok: result.ok, label: result.label, detail: result.detail });
     }
+
+    // Final step: security (auto-applied at level=normal unless --level overrides)
+    renderStep(totalSteps, totalSteps, 'Security');
+    const securityResult = applySecurityToProvider(provider, opts.level || 'normal');
+    results.push({ ok: securityResult.ok, label: securityResult.label, detail: securityResult.detail });
 
     renderSummary(results);
   }
 
   renderDone(providers.map(p => p.name));
+}
+
+function applySecurityToProvider(provider: Provider, level: string): SummaryResult {
+  const validLevels = ['loose', 'normal', 'strict'];
+  const lvl = validLevels.includes(level) ? level : 'normal';
+  const presetPath = path.join(PACKAGE_ROOT, 'presets', 'security', `${lvl}.json`);
+  const config = readJson(presetPath) as unknown as SecurityLevelConfig | null;
+  if (!config) {
+    return { ok: false, label: 'Security', detail: `preset missing: ${lvl}` };
+  }
+
+  provider.applySecurityLevel(config);
+
+  if (lvl !== 'loose') {
+    const blockFile = lvl === 'strict' ? 'strict-md.md' : 'normal-md.md';
+    const blockPath = path.join(PACKAGE_ROOT, 'presets', 'security', blockFile);
+    try {
+      const block = fs.readFileSync(blockPath, 'utf-8').trim();
+      provider.writeSecurityBlock(block);
+    } catch {}
+  } else {
+    provider.removeSecurityBlock();
+  }
+
+  return { ok: true, label: 'Security', detail: `level: ${lvl}` };
 }
 
 // --- Install ---

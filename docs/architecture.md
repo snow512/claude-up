@@ -143,6 +143,37 @@ cup init
       → renderSummary(results)
 ```
 
+## Security Levels
+
+`cup security` 명령군은 3단계 보안 레벨을 제공한다:
+
+| Level | deny rules | Instruction block | Codex sandbox | Use case |
+|-------|------------|-------------------|---------------|----------|
+| `loose` | 2 (rm -rf /, force-push) | 없음 | `danger-full-access` | 빠른 실험, 토이 프로젝트 |
+| `normal` (default) | 7 (현재 baseline) | 민감정보 커밋 점검 | `workspace-write` | 일반 개발 |
+| `strict` | 12 (normal + curl\|bash, eval, chmod 777 등) | normal + 외부호출/배포 가드 | `read-only` | 프로덕션, 팀 협업 |
+
+### 파일 구조
+
+```
+presets/security/
+├── loose.json           # 레벨별 deny + sandbox + policies
+├── normal.json
+├── strict.json
+├── normal-md.md         # cup-security 블록 (instruction file에 주입)
+└── strict-md.md
+```
+
+### 작동 방식
+
+1. `cup security init --level=<lvl>`은 `presets/security/<lvl>.json`을 읽어서 각 프로바이더에 적용
+2. `Provider.applySecurityLevel(config)`은 프로바이더 네이티브 포맷으로 변환:
+   - Claude → `permissions.deny[]` 갱신
+   - Gemini → `~/.gemini/policies/cup-deny.toml` 재생성
+   - Codex → `config.toml`의 `sandbox_mode` 갱신
+3. loose가 아닌 경우 `cup-security` 블록을 instruction file에 주입 (별도 마커 `<!-- <cup-security> -->`)
+4. `cup init` 실행 시 마지막 단계에서 `applySecurityToProvider` 자동 호출 (default: normal)
+
 ## Dependencies
 
 - **Runtime**: `smol-toml` (TOML read/write for Codex config.toml, Gemini policies)
