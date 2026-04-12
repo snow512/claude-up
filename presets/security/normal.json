@@ -1,0 +1,31 @@
+{
+  "level": "normal",
+  "description": "Default security level — current user baseline",
+  "enforce_chmod_0600": false,
+  "providers": {
+    "claude": {
+      "deny": [
+        "Bash(rm -rf:*)",
+        "Bash(git push --force:*)",
+        "Bash(git push -f:*)",
+        "Bash(git reset --hard:*)",
+        "Bash(git clean -f:*)",
+        "Bash(git checkout -- .:*)",
+        "Bash(git branch -D:*)"
+      ]
+    },
+    "gemini": {
+      "policies": [
+        { "toolName": "shell", "argsPattern": "rm\\s+-rf", "decision": "deny", "priority": 500 },
+        { "toolName": "shell", "argsPattern": "git push.*(--force|-f)", "decision": "deny", "priority": 500 },
+        { "toolName": "shell", "argsPattern": "git reset.*--hard", "decision": "deny", "priority": 500 },
+        { "toolName": "shell", "argsPattern": "git clean.*-f", "decision": "deny", "priority": 500 },
+        { "toolName": "shell", "argsPattern": "git checkout.*--\\s*\\.", "decision": "deny", "priority": 500 },
+        { "toolName": "shell", "argsPattern": "git branch.*-D", "decision": "deny", "priority": 500 }
+      ]
+    },
+    "codex": {
+      "sandbox_mode": "workspace-write"
+    }
+  }
+}

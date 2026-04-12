@@ -303,5 +303,23 @@ class CodexProvider {
     getAvailableSkillsFromRepo() {
         return (0, base_1.getAvailableSkillsFromRepo)(this.name);
     }
+    // --- Security ---
+    applySecurityLevel(config) {
+        const codexConfig = config.providers.codex;
+        if (!codexConfig?.sandbox_mode)
+            return;
+        const settings = this.readSettings() || {};
+        settings.sandbox_mode = codexConfig.sandbox_mode;
+        this.writeSettings(settings);
+    }
+    readSecurityBlock() {
+        return (0, base_1.readSecurityBlockFromFile)(this.getInstructionFilePath('global'));
+    }
+    writeSecurityBlock(content) {
+        (0, base_1.writeSecurityBlockToFile)(this.getInstructionFilePath('global'), content);
+    }
+    removeSecurityBlock() {
+        (0, base_1.removeSecurityBlockFromFile)(this.getInstructionFilePath('global'));
+    }
 }
 exports.CodexProvider = CodexProvider;

@@ -1,0 +1,23 @@
+{
+  "level": "loose",
+  "description": "Loose security — fast experiments, personal toy projects",
+  "enforce_chmod_0600": false,
+  "providers": {
+    "claude": {
+      "deny": [
+        "Bash(rm -rf /:*)",
+        "Bash(git push --force:*)",
+        "Bash(git push -f:*)"
+      ]
+    },
+    "gemini": {
+      "policies": [
+        { "toolName": "shell", "argsPattern": "rm\\s+-rf\\s+/", "decision": "deny", "priority": 500 },
+        { "toolName": "shell", "argsPattern": "git push.*(--force|-f)", "decision": "deny", "priority": 500 }
+      ]
+    },
+    "codex": {
+      "sandbox_mode": "danger-full-access"
+    }
+  }
+}

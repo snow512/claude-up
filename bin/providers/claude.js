@@ -432,5 +432,25 @@ class ClaudeProvider {
     getAvailableSkillsFromRepo() {
         return (0, base_1.getAvailableSkillsFromRepo)(this.name);
     }
+    // --- Security ---
+    applySecurityLevel(config) {
+        const claudeConfig = config.providers.claude;
+        if (!claudeConfig)
+            return;
+        const settings = this.readSettings() || {};
+        const perms = settings.permissions || {};
+        perms.deny = claudeConfig.deny || [];
+        settings.permissions = perms;
+        this.writeSettings(settings);
+    }
+    readSecurityBlock() {
+        return (0, base_1.readSecurityBlockFromFile)(this.getInstructionFilePath('global'));
+    }
+    writeSecurityBlock(content) {
+        (0, base_1.writeSecurityBlockToFile)(this.getInstructionFilePath('global'), content);
+    }
+    removeSecurityBlock() {
+        (0, base_1.removeSecurityBlockFromFile)(this.getInstructionFilePath('global'));
+    }
 }
 exports.ClaudeProvider = ClaudeProvider;

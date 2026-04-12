@@ -4,6 +4,7 @@ import { runInit, runProjectInit, runInstall, runClone, runBackup, runRestore, r
 import type { Opts } from './installer';
 import { renderBanner, C, style } from './ui';
 import { runLogin, runPush, runPull } from './sync';
+import { runSecurity } from './security';
 
 // --- Parse args ---
 
@@ -31,6 +32,7 @@ const opts: Opts = {
   project:  getFlag('project') || undefined,
   limit:    parseInt(getFlag('limit') || '10', 10),
   provider: getFlag('provider') || undefined,
+  level:    getFlag('level') || undefined,
 };
 
 // --- Help ---
@@ -94,6 +96,14 @@ function showHelp(): void {
   console.log(`    ${style('pull', c)}              Download settings & skills from cloud`);
   console.log(`      ${style('--yes, -y', g)}       Apply all without asking\n`);
 
+  console.log(`  ${style('Security', b)}`);
+  console.log(`    ${style('security', c)}          Show security subcommand help`);
+  console.log(`    ${style('security init', c)}     Apply a security level (deny rules + guidance block)`);
+  console.log(`      ${style('--level=<level>', g)} loose | normal | strict (default: normal)`);
+  console.log(`    ${style('security check', c)}    Audit current security posture`);
+  console.log(`    ${style('security diff', c)}     Compare current vs target level`);
+  console.log(`      ${style('--level=<level>', g)} Target level to compare against\n`);
+
   console.log(`  ${style('Global Options', b)}`);
   console.log(`    ${style('--provider=<name>', c)}  Target provider (claude,gemini,codex; auto-detect if omitted)`);
   console.log(`    ${style('--help, -h', c)}        Show this help message`);
@@ -125,6 +135,7 @@ switch (command) {
   case 'login':        runLogin(opts); break;
   case 'push':         runPush(restArgs.length > 0 ? restArgs : undefined, opts); break;
   case 'pull':         runPull(opts); break;
+  case 'security':     runSecurity(subcommand, opts); break;
   case '--version':    showVersion(); break;
   case '--help': case '-h': case undefined:
     showHelp(); break;

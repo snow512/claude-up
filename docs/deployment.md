@@ -105,6 +105,7 @@ Before publishing a new version:
 - [ ] `npm run build` — compiles without errors
 - [ ] `npm test` — all 51 tests pass
 - [ ] `node bin/cli.js doctor` — no errors on Claude, Gemini, Codex
+- [ ] `node bin/cli.js security check` — no failures across providers
 - [ ] `node bin/cli.js --version` — matches `package.json`
 - [ ] `CHANGELOG.md` updated (if exists)
 - [ ] `README.md` reflects new features

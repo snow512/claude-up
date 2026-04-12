@@ -97,15 +97,43 @@ async function runInit(opts = {}) {
         if (bakPath)
             console.log(`\n  ${(0, ui_1.style)('💾', ui_1.C.gray)} ${(0, ui_1.style)('Backup: ' + bakPath, ui_1.C.gray)}`);
         const steps = provider.getInitSteps();
+        const totalSteps = steps.length + 1; // +1 for security step
         const results = [];
         for (let i = 0; i < steps.length; i++) {
-            (0, ui_1.renderStep)(i + 1, steps.length, steps[i].label);
+            (0, ui_1.renderStep)(i + 1, totalSteps, steps[i].label);
             const result = await steps[i].execute(useDefaults, lang);
             results.push({ ok: result.ok, label: result.label, detail: result.detail });
         }
+        // Final step: security (auto-applied at level=normal unless --level overrides)
+        (0, ui_1.renderStep)(totalSteps, totalSteps, 'Security');
+        const securityResult = applySecurityToProvider(provider, opts.level || 'normal');
+        results.push({ ok: securityResult.ok, label: securityResult.label, detail: securityResult.detail });
         (0, ui_1.renderSummary)(results);
     }
     (0, ui_1.renderDone)(providers.map(p => p.name));
+}
+function applySecurityToProvider(provider, level) {
+    const validLevels = ['loose', 'normal', 'strict'];
+    const lvl = validLevels.includes(level) ? level : 'normal';
+    const presetPath = path.join(utils_1.PACKAGE_ROOT, 'presets', 'security', `${lvl}.json`);
+    const config = (0, utils_1.readJson)(presetPath);
+    if (!config) {
+        return { ok: false, label: 'Security', detail: `preset missing: ${lvl}` };
+    }
+    provider.applySecurityLevel(config);
+    if (lvl !== 'loose') {
+        const blockFile = lvl === 'strict' ? 'strict-md.md' : 'normal-md.md';
+        const blockPath = path.join(utils_1.PACKAGE_ROOT, 'presets', 'security', blockFile);
+        try {
+            const block = fs.readFileSync(blockPath, 'utf-8').trim();
+            provider.writeSecurityBlock(block);
+        }
+        catch { }
+    }
+    else {
+        provider.removeSecurityBlock();
+    }
+    return { ok: true, label: 'Security', detail: `level: ${lvl}` };
 }
 // --- Install ---
 async function runInstall(target, opts = {}) {

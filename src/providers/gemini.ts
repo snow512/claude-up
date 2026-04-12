@@ -4,7 +4,7 @@ import { execFileSync } from 'child_process';
 import { readJson, writeJson, backup, parseSimpleYaml, PACKAGE_ROOT } from '../utils';
 import { progressLine, ask, checkbox, C, style } from '../ui';
 import type { CheckboxItem } from '../ui';
-import type { Provider, ProviderName, PermissionIntents, PluginInfo, SessionInfo, SessionOpts, SyncKeys, InitStep, StepResult } from './types';
+import type { Provider, ProviderName, PermissionIntents, PluginInfo, SessionInfo, SessionOpts, SyncKeys, InitStep, StepResult, SecurityLevelConfig } from './types';
 import {
   buildSkillContent,
   getAvailableSkillsFromRepo,
@@ -12,6 +12,9 @@ import {
   writeCupBlockToFile,
   installSkillWithMeta,
   listSimpleSessions,
+  readSecurityBlockFromFile,
+  writeSecurityBlockToFile,
+  removeSecurityBlockFromFile,
 } from './base';
 
 const HOME = require('os').homedir();
@@ -347,5 +350,25 @@ export class GeminiProvider implements Provider {
 
   getAvailableSkillsFromRepo(): CheckboxItem[] {
     return getAvailableSkillsFromRepo(this.name);
+  }
+
+  // --- Security ---
+
+  applySecurityLevel(config: SecurityLevelConfig): void {
+    const geminiConfig = config.providers.gemini;
+    if (!geminiConfig?.policies) return;
+    this.writePolicies(geminiConfig.policies);
+  }
+
+  readSecurityBlock(): string | null {
+    return readSecurityBlockFromFile(this.getInstructionFilePath('global'));
+  }
+
+  writeSecurityBlock(content: string): void {
+    writeSecurityBlockToFile(this.getInstructionFilePath('global'), content);
+  }
+
+  removeSecurityBlock(): void {
+    removeSecurityBlockFromFile(this.getInstructionFilePath('global'));
   }
 }

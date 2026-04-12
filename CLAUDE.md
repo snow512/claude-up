@@ -86,6 +86,10 @@ cup resume [id] [--fork]                    # Resume a session
 cup login                                   # GitHub token for cloud sync
 cup push [skills...]                        # Upload to Gist (multi-provider)
 cup pull [--provider=...]                   # Download from Gist
+cup security                                # Security subcommand help
+cup security init [--level=loose|normal|strict]  # Apply security level
+cup security check [--verbose]              # Audit current security posture
+cup security diff [--level=...]             # Compare current vs target level
 ```
 
 Alias: `claude-up` = `cup`

@@ -43,6 +43,17 @@ export interface SyncKeys {
   instructionFileKey: string;
 }
 
+export interface SecurityLevelConfig {
+  level: 'loose' | 'normal' | 'strict';
+  description: string;
+  enforce_chmod_0600?: boolean;
+  providers: {
+    claude?: { deny?: string[] };
+    gemini?: { policies?: Array<Record<string, unknown>> };
+    codex?: { sandbox_mode?: string };
+  };
+}
+
 export interface Provider {
   // --- Identity ---
   readonly name: ProviderName;
@@ -103,4 +114,10 @@ export interface Provider {
 
   // --- Sync ---
   getSyncKeys(): SyncKeys;
+
+  // --- Security ---
+  applySecurityLevel(config: SecurityLevelConfig): void;
+  readSecurityBlock(): string | null;
+  writeSecurityBlock(content: string): void;
+  removeSecurityBlock(): void;
 }
