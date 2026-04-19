@@ -8,6 +8,7 @@ import { readJson, writeJson, copyDirRecursive, isDirChanged, backup, timestamp,
 import { resolveProviders, getProvider } from './providers/registry';
 import type { Provider, SecurityLevelConfig } from './providers/types';
 import { applyGuidanceCategories, getGuidanceCategories, parseCategories as parseGuidanceCategories, InvalidCategoriesError } from './guidance';
+import { installPresetLibrary } from './library';
 
 // --- Types ---
 
@@ -109,7 +110,15 @@ export async function runInit(opts: Opts = {}): Promise<void> {
     renderSummary(results);
   }
 
+  await installLibraryDuringInit(useDefaults, opts.force ?? false);
+
   renderDone(providers.map(p => p.name));
+}
+
+async function installLibraryDuringInit(useDefaults: boolean, force: boolean): Promise<void> {
+  const counts = await installPresetLibrary({ yes: useDefaults, force });
+  if (!counts) return;
+  console.log(`\n  ${style('📚', C.gray)} ${style(`Library: ${counts.created} created, ${counts.updated} updated, ${counts.unchanged} unchanged`, C.gray)}`);
 }
 
 function applySecurityToProvider(provider: Provider, level: string): SummaryResult {

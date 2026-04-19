@@ -61,6 +61,7 @@ Object.defineProperty(exports, "backup", { enumerable: true, get: function () { 
 Object.defineProperty(exports, "PACKAGE_ROOT", { enumerable: true, get: function () { return utils_1.PACKAGE_ROOT; } });
 const registry_1 = require("./providers/registry");
 const guidance_1 = require("./guidance");
+const library_1 = require("./library");
 // --- Backward compat exports (used by sync.ts) ---
 exports.CLAUDE_DIR = path.join(utils_1.HOME_DIR, '.claude');
 // --- Main: init ---
@@ -123,7 +124,14 @@ async function runInit(opts = {}) {
         results.push({ ok: guidanceResult.ok, label: guidanceResult.label, detail: guidanceResult.detail });
         (0, ui_1.renderSummary)(results);
     }
+    await installLibraryDuringInit(useDefaults, opts.force ?? false);
     (0, ui_1.renderDone)(providers.map(p => p.name));
+}
+async function installLibraryDuringInit(useDefaults, force) {
+    const counts = await (0, library_1.installPresetLibrary)({ yes: useDefaults, force });
+    if (!counts)
+        return;
+    console.log(`\n  ${(0, ui_1.style)('📚', ui_1.C.gray)} ${(0, ui_1.style)(`Library: ${counts.created} created, ${counts.updated} updated, ${counts.unchanged} unchanged`, ui_1.C.gray)}`);
 }
 function applySecurityToProvider(provider, level) {
     const validLevels = ['loose', 'normal', 'strict'];

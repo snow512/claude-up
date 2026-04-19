@@ -6,6 +6,7 @@ import { renderBanner, C, style } from './ui';
 import { runLogin, runPush, runPull } from './sync';
 import { runSecurity } from './security';
 import { runGuidance } from './guidance';
+import { runLibrary } from './library';
 
 // --- Parse args ---
 
@@ -120,6 +121,14 @@ function showHelp(): void {
   console.log(`    ${style('guidance remove', c)}   Uninstall guidance categories`);
   console.log(`      ${style('--categories=<list>', g)} comma-separated ids to remove\n`);
 
+  console.log(`  ${style('Library', b)}`);
+  console.log(`    ${style('library', c)}           Show library subcommand help`);
+  console.log(`    ${style('library install', c)}   Copy preset library files → ~/.claude/library/`);
+  console.log(`    ${style('library collect', c)}   Copy ~/.claude/library/ → preset library files`);
+  console.log(`      ${style('--force, -f', g)}     Overwrite without backup`);
+  console.log(`      ${style('--yes, -y', g)}       Skip confirmation`);
+  console.log(`    ${style('library list', c)}      Show library file inventory + diff status\n`);
+
   console.log(`  ${style('Global Options', b)}`);
   console.log(`    ${style('--provider=<name>', c)}  Target provider (claude,gemini,codex; auto-detect if omitted)`);
   console.log(`    ${style('--help, -h', c)}        Show this help message`);
@@ -155,6 +164,7 @@ async function dispatch(): Promise<void> {
     case 'pull':         await runPull(opts); break;
     case 'security':     await runSecurity(subcommand, opts); break;
     case 'guidance':     await runGuidance(subcommand, opts); break;
+    case 'library':      await runLibrary(subcommand, opts); break;
     case '--version':    showVersion(); break;
     case '--help': case '-h': case undefined:
       showHelp(); break;

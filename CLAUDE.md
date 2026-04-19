@@ -94,6 +94,10 @@ cup guidance                                # Guidance subcommand help
 cup guidance init [--categories=...]        # Install instruction categories
 cup guidance list                           # Show available + installed categories
 cup guidance remove [--categories=...]      # Uninstall guidance categories
+cup library                                 # Library subcommand help
+cup library install                         # Copy preset library → ~/.claude/library/
+cup library collect                         # Copy ~/.claude/library/ → preset library
+cup library list                            # Show library file inventory + diff
 ```
 
 Alias: `claude-up` = `cup`

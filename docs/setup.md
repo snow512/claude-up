@@ -86,6 +86,12 @@ cup guidance                                           # Show guidance help
 cup guidance init [--categories=language,scope,design,deployment,commit] [--provider=...] [--yes]
 cup guidance list [--provider=...]
 cup guidance remove [--categories=...] [--provider=...] [--yes]
+
+# Library  (auto-installed at end of `cup init`)
+cup library                                            # Show library help
+cup library install [--force] [--yes]                  # presets/library/* → ~/.claude/library/
+cup library collect [--force] [--yes]                  # ~/.claude/library/* → presets/library/
+cup library list                                       # Show file inventory + diff
 ```
 
 ## Security Levels

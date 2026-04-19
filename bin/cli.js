@@ -6,6 +6,7 @@ const ui_1 = require("./ui");
 const sync_1 = require("./sync");
 const security_1 = require("./security");
 const guidance_1 = require("./guidance");
+const library_1 = require("./library");
 // --- Parse args ---
 const args = process.argv.slice(2);
 const flags = new Set(args.filter(a => a.startsWith('-') && !a.includes('=')));
@@ -104,6 +105,13 @@ function showHelp() {
     console.log(`    ${(0, ui_1.style)('guidance list', c)}     Show available + installed guidance categories`);
     console.log(`    ${(0, ui_1.style)('guidance remove', c)}   Uninstall guidance categories`);
     console.log(`      ${(0, ui_1.style)('--categories=<list>', g)} comma-separated ids to remove\n`);
+    console.log(`  ${(0, ui_1.style)('Library', b)}`);
+    console.log(`    ${(0, ui_1.style)('library', c)}           Show library subcommand help`);
+    console.log(`    ${(0, ui_1.style)('library install', c)}   Copy preset library files → ~/.claude/library/`);
+    console.log(`    ${(0, ui_1.style)('library collect', c)}   Copy ~/.claude/library/ → preset library files`);
+    console.log(`      ${(0, ui_1.style)('--force, -f', g)}     Overwrite without backup`);
+    console.log(`      ${(0, ui_1.style)('--yes, -y', g)}       Skip confirmation`);
+    console.log(`    ${(0, ui_1.style)('library list', c)}      Show library file inventory + diff status\n`);
     console.log(`  ${(0, ui_1.style)('Global Options', b)}`);
     console.log(`    ${(0, ui_1.style)('--provider=<name>', c)}  Target provider (claude,gemini,codex; auto-detect if omitted)`);
     console.log(`    ${(0, ui_1.style)('--help, -h', c)}        Show this help message`);
@@ -170,6 +178,9 @@ async function dispatch() {
             break;
         case 'guidance':
             await (0, guidance_1.runGuidance)(subcommand, opts);
+            break;
+        case 'library':
+            await (0, library_1.runLibrary)(subcommand, opts);
             break;
         case '--version':
             showVersion();

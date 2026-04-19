@@ -25,6 +25,7 @@ claude-up/
 │   ├── installer.ts            # init/install/project-init/clone/backup/restore/clean/status/doctor/update/sessions/resume/uninstall
 │   ├── security.ts             # security init/check/diff (level: loose/normal/strict)
 │   ├── guidance.ts             # guidance init/list/remove (categories: language/scope/…)
+│   ├── library.ts              # library install/collect/list (whole-file sync with presets/library/)
 │   ├── sync.ts                 # login/push/pull (GitHub Gist cloud sync)
 │   ├── ui.ts                   # Terminal UI (colors, banner, spinner, checkbox, ask)
 │   ├── utils.ts                # Shared utilities (readJson, writeJson, backup, parseSimpleYaml)
@@ -44,6 +45,7 @@ claude-up/
 │   ├── claude-md.md            # CLAUDE.md cup-managed block template
 │   ├── gemini-md.md            # GEMINI.md cup-managed block template
 │   ├── agents-md.md            # AGENTS.md cup-managed block template
+│   ├── library/                # Reference docs synced with ~/.claude/library/
 │   └── project/
 │       ├── claude.json         # .claude/settings.local.json
 │       ├── gemini.json         # .gemini/settings.json (project)
@@ -216,6 +218,27 @@ presets/guidance/
 ### User 영역 확장
 
 User 가 직접 custom category 를 만들거나 `guidance-promote` skill 을 통해 project instruction file 의 rule 을 user 영역으로 승격할 수 있다. Preset 에 없는 id 는 `cup guidance list` 에서 `? <id> (unknown category)` 로 표시된다.
+
+## Library
+
+`cup library` 는 `presets/library/` 와 `~/.claude/library/` 사이에서 reference docs (design-guide, emoji rules, fix-issues guard 등) 를 file-단위로 양방향 sync 한다. Guidance 와 달리 marker-block merge 없이 file 통째로 copy.
+
+### Subcommands
+
+| Subcommand | 방향 | 동작 |
+|------------|------|------|
+| `install` | preset → user | 모든 preset file 을 user 디렉토리로 복사. 이미 존재하면서 다른 경우 `.bak.<ts>` backup 후 overwrite |
+| `collect` | user → preset | 역방향 — user 의 변경을 preset 으로 가져옴 (cup repo 소유자가 자기 customization 을 commit 하기 위해 사용) |
+| `list` | — | 양쪽 file 목록 + per-file 상태 (`= same` / `~ differ` / `+ preset only` / `+ user only`) |
+
+### 옵션
+
+- `--force/-f`: backup 생략 (덮어쓰기만)
+- `--yes/-y`: confirmation prompt 생략
+
+### Init 통합
+
+`cup init` 의 provider loop 가 끝난 직후 (renderDone 직전) library 도 자동 install. `--yes` 면 prompt 없이 진행, interactive 면 한 번 confirm.
 
 ## Dependencies
 
