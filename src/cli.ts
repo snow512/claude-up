@@ -1,10 +1,13 @@
 #!/usr/bin/env node
 
-import { runInit, runProjectInit, runInstall, runClone, runBackup, runRestore, runStatus, runDoctor, runUpdate, runSessions, runResume, runUninstall } from './installer';
+import { runInit, runProjectInit, runInstall, runClone, runBackup, runRestore, runStatus, runDoctor, runUpdate, runSessions, runResume, runUninstall, runClean } from './installer';
 import type { Opts } from './installer';
 import { renderBanner, C, style } from './ui';
 import { runLogin, runPush, runPull } from './sync';
 import { runSecurity } from './security';
+import { runGuidance } from './guidance';
+import { runLibrary } from './library';
+import { runMd } from './md';
 
 // --- Parse args ---
 
@@ -33,6 +36,8 @@ const opts: Opts = {
   limit:    parseInt(getFlag('limit') || '10', 10),
   provider: getFlag('provider') || undefined,
   level:    getFlag('level') || undefined,
+  type:     getFlag('type') || undefined,
+  categories: getFlag('categories') || undefined,
 };
 
 // --- Help ---
@@ -81,10 +86,14 @@ function showHelp(): void {
   console.log(`  ${style('Environment', b)}`);
   console.log(`    ${style('clone', c)}             Export ~/.claude/ as portable package`);
   console.log(`      ${style('--output=<dir>', g)}  Output directory`);
-  console.log(`    ${style('backup', c)}            Snapshot ~/.claude/ to .tar.gz`);
+  console.log(`    ${style('backup', c)}            Snapshot environment to archive`);
+  console.log(`      ${style('--type=<all|cup>', g)} all = full .tar.gz (default); cup = zip of cup files`);
   console.log(`      ${style('--output=<file>', g)} Output file path`);
-  console.log(`    ${style('restore', c)} <file>    Restore from backup`);
+  console.log(`    ${style('restore', c)} [file]    Restore from backup`);
+  console.log(`      ${style('--type=<all|cup>', g)} all (default) = tar.gz/folder; cup = zip (auto-picks latest)`);
   console.log(`      ${style('--force, -f', g)}     Skip backup of current settings`);
+  console.log(`    ${style('clean', c)}             Back up (cup) then remove cup-managed files`);
+  console.log(`      ${style('--yes, -y', g)}       Skip confirmation`);
   console.log(`    ${style('uninstall', c)}         Remove claude-up (skills, settings, CLAUDE.md)`);
   console.log(`      ${style('--yes, -y', g)}       Remove everything without asking\n`);
 
@@ -103,6 +112,31 @@ function showHelp(): void {
   console.log(`    ${style('security check', c)}    Audit current security posture`);
   console.log(`    ${style('security diff', c)}     Compare current vs target level`);
   console.log(`      ${style('--level=<level>', g)} Target level to compare against\n`);
+
+  console.log(`  ${style('Guidance', b)}`);
+  console.log(`    ${style('guidance', c)}          Show guidance subcommand help`);
+  console.log(`    ${style('guidance init', c)}     Install instruction categories (language, scope, …)`);
+  console.log(`      ${style('--categories=<list>', g)} comma-separated ids (default: interactive checkbox)`);
+  console.log(`      ${style('--yes, -y', g)}       Apply all without prompting`);
+  console.log(`    ${style('guidance list', c)}     Show available + installed guidance categories`);
+  console.log(`    ${style('guidance remove', c)}   Uninstall guidance categories`);
+  console.log(`      ${style('--categories=<list>', g)} comma-separated ids to remove\n`);
+
+  console.log(`  ${style('Library', b)}`);
+  console.log(`    ${style('library', c)}           Show library subcommand help`);
+  console.log(`    ${style('library install', c)}   Copy preset library files → ~/.claude/library/`);
+  console.log(`    ${style('library collect', c)}   Copy ~/.claude/library/ → preset library files`);
+  console.log(`      ${style('--force, -f', g)}     Overwrite without backup`);
+  console.log(`      ${style('--yes, -y', g)}       Skip confirmation`);
+  console.log(`    ${style('library list', c)}      Show library file inventory + diff status\n`);
+
+  console.log(`  ${style('Markdown Templates', b)}`);
+  console.log(`    ${style('md', c)}                Show md subcommand help`);
+  console.log(`    ${style('md <template>', c)}     Drop a template into cwd (e.g. ${style('cup md design', c)} → ./DESIGN.md)`);
+  console.log(`      ${style('--output=<path>', g)} Custom destination`);
+  console.log(`      ${style('--force, -f', g)}     Overwrite without backup`);
+  console.log(`      ${style('--yes, -y', g)}       Skip confirmation`);
+  console.log(`    ${style('md list', c)}           Show available templates\n`);
 
   console.log(`  ${style('Global Options', b)}`);
   console.log(`    ${style('--provider=<name>', c)}  Target provider (claude,gemini,codex; auto-detect if omitted)`);
@@ -133,10 +167,14 @@ async function dispatch(): Promise<void> {
     case 'sessions':     runSessions(opts); break;
     case 'resume':       await runResume(subcommand, opts); break;
     case 'uninstall':    await runUninstall(opts); break;
+    case 'clean':        await runClean(opts); break;
     case 'login':        await runLogin(opts); break;
     case 'push':         await runPush(restArgs.length > 0 ? restArgs : undefined, opts); break;
     case 'pull':         await runPull(opts); break;
     case 'security':     await runSecurity(subcommand, opts); break;
+    case 'guidance':     await runGuidance(subcommand, opts); break;
+    case 'library':      await runLibrary(subcommand, opts); break;
+    case 'md':           await runMd(subcommand, opts); break;
     case '--version':    showVersion(); break;
     case '--help': case '-h': case undefined:
       showHelp(); break;

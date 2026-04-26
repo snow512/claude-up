@@ -4,9 +4,12 @@ import * as readline from 'readline';
 import { execFileSync } from 'child_process';
 import { renderBanner, renderStep, progressLine, ask, checkbox, renderSummary, renderDone, C, style } from './ui';
 import type { SummaryResult, CheckboxItem } from './ui';
-import { readJson, writeJson, copyDirRecursive, isDirChanged, backup, timestamp, PACKAGE_ROOT, HOME_DIR } from './utils';
+import { readJson, writeJson, copyDirRecursive, isDirChanged, backup, timestamp, humanTimestamp, PACKAGE_ROOT, HOME_DIR } from './utils';
 import { resolveProviders, getProvider } from './providers/registry';
 import type { Provider, SecurityLevelConfig } from './providers/types';
+import { applyGuidanceCategories, getGuidanceCategories, parseCategories as parseGuidanceCategories, InvalidCategoriesError } from './guidance';
+import { installPresetLibrary } from './library';
+import { installMdTemplates } from './md';
 
 // --- Types ---
 
@@ -23,6 +26,8 @@ export interface Opts {
   limit?: number;
   provider?: string;
   level?: string;
+  type?: string;
+  categories?: string;
 }
 
 interface CloneItem {
@@ -75,11 +80,16 @@ export async function runInit(opts: Opts = {}): Promise<void> {
       console.log(`\n  ${style(`── ${provider.displayName} ──`, C.bold, C.cyan)}`);
     }
 
-    const bakPath = provider.backupSettings();
-    if (bakPath) console.log(`\n  ${style('💾', C.gray)} ${style('Backup: ' + bakPath, C.gray)}`);
+    try {
+      const zipPath = await createCupBackup(provider);
+      if (zipPath) console.log(`\n  ${style('💾', C.gray)} ${style('Cup backup: ' + zipPath, C.gray)}`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.log(`\n  ${style('⚠', C.yellow)} ${style('Cup backup skipped: ' + msg, C.gray)}`);
+    }
 
     const steps = provider.getInitSteps();
-    const totalSteps = steps.length + 1; // +1 for security step
+    const totalSteps = steps.length + 2; // +1 security, +1 guidance
     const results: SummaryResult[] = [];
 
     for (let i = 0; i < steps.length; i++) {
@@ -88,15 +98,35 @@ export async function runInit(opts: Opts = {}): Promise<void> {
       results.push({ ok: result.ok, label: result.label, detail: result.detail });
     }
 
-    // Final step: security (auto-applied at level=normal unless --level overrides)
-    renderStep(totalSteps, totalSteps, 'Security');
+    // Security step: auto-applied at level=normal unless --level overrides
+    renderStep(steps.length + 1, totalSteps, 'Security');
     const securityResult = applySecurityToProvider(provider, opts.level || 'normal');
     results.push({ ok: securityResult.ok, label: securityResult.label, detail: securityResult.detail });
+
+    // Guidance step: apply selected categories (default: all)
+    renderStep(totalSteps, totalSteps, 'Guidance');
+    const guidanceResult = await applyGuidanceToProvider(provider, opts, useDefaults);
+    results.push({ ok: guidanceResult.ok, label: guidanceResult.label, detail: guidanceResult.detail });
 
     renderSummary(results);
   }
 
+  await installLibraryDuringInit(useDefaults, opts.force ?? false);
+  installMdDuringInit(opts.force ?? false);
+
   renderDone(providers.map(p => p.name));
+}
+
+async function installLibraryDuringInit(useDefaults: boolean, force: boolean): Promise<void> {
+  const counts = await installPresetLibrary({ yes: useDefaults, force });
+  if (!counts) return;
+  console.log(`\n  ${style('📚', C.gray)} ${style(`Library: ${counts.created} created, ${counts.updated} updated, ${counts.unchanged} unchanged`, C.gray)}`);
+}
+
+function installMdDuringInit(force: boolean): void {
+  const counts = installMdTemplates({ force });
+  if (!counts) return;
+  console.log(`  ${style('📝', C.gray)} ${style(`MD templates: ${counts.created} created, ${counts.updated} updated, ${counts.unchanged} unchanged`, C.gray)}`);
 }
 
 function applySecurityToProvider(provider: Provider, level: string): SummaryResult {
@@ -122,6 +152,30 @@ function applySecurityToProvider(provider: Provider, level: string): SummaryResu
   }
 
   return { ok: true, label: 'Security', detail: `level: ${lvl}` };
+}
+
+async function applyGuidanceToProvider(provider: Provider, opts: Opts, useDefaults: boolean): Promise<SummaryResult> {
+  const all = getGuidanceCategories();
+
+  let ids: string[];
+  if (opts.categories) {
+    try { ids = parseGuidanceCategories(opts.categories, all); }
+    catch (err) {
+      if (err instanceof InvalidCategoriesError) return { ok: false, label: 'Guidance', detail: `unknown: ${err.invalid.join(', ')}` };
+      throw err;
+    }
+  } else if (useDefaults) {
+    ids = all.map(c => c.id);
+  } else {
+    const items: CheckboxItem[] = all.map(c => ({ name: c.id, desc: c.description }));
+    console.log(`\n  ${style('Select guidance categories to install:', C.bold)}`);
+    ids = await checkbox(items);
+  }
+
+  if (ids.length === 0) return { ok: true, label: 'Guidance', detail: 'skipped' };
+
+  applyGuidanceCategories(provider, ids);
+  return { ok: true, label: 'Guidance', detail: ids.join(', ') };
 }
 
 // --- Install ---
@@ -292,12 +346,87 @@ export async function runClone(opts: Opts = {}): Promise<void> {
 
 // --- Backup ---
 
+function getRepoSkillNames(): Set<string> {
+  const names = new Set<string>();
+  try {
+    for (const e of fs.readdirSync(path.join(PACKAGE_ROOT, 'user-skills'), { withFileTypes: true })) {
+      if (e.isDirectory()) names.add(e.name);
+    }
+  } catch {}
+  return names;
+}
+
+/** Returns HOME_DIR-relative paths for files/dirs that `cup init` creates or modifies. */
+function getCupManagedRelPaths(provider: Provider): string[] {
+  const rel = (abs: string): string => path.relative(HOME_DIR, abs);
+  const result: string[] = [];
+
+  const settingsPath = path.join(provider.homeDir, provider.settingsFileName);
+  if (fs.existsSync(settingsPath)) result.push(rel(settingsPath));
+
+  if (provider.hasStatusLine) {
+    const slPath = path.join(provider.homeDir, 'statusline-command.sh');
+    if (fs.existsSync(slPath)) result.push(rel(slPath));
+  }
+
+  try {
+    const instrPath = provider.getInstructionFilePath('global');
+    if (fs.existsSync(instrPath)) result.push(rel(instrPath));
+  } catch {}
+
+  const repoSkills = getRepoSkillNames();
+  for (const name of provider.getInstalledSkills()) {
+    if (repoSkills.has(name)) {
+      const skillPath = path.join(provider.skillsDir, name);
+      if (fs.existsSync(skillPath)) result.push(rel(skillPath));
+    }
+  }
+
+  return result.filter(p => !p.startsWith('..'));
+}
+
+/** Creates a cup-scope zip backup at ~/.claude/cup/backups/<timestamp>.zip. Returns the zip path, or null if nothing to back up. */
+export async function createCupBackup(provider: Provider, outputOverride?: string): Promise<string | null> {
+  const relPaths = getCupManagedRelPaths(provider);
+  if (relPaths.length === 0) return null;
+
+  const backupsDir = path.join(provider.homeDir, 'cup', 'backups');
+  fs.mkdirSync(backupsDir, { recursive: true });
+  const zipPath = outputOverride || path.join(backupsDir, `${humanTimestamp()}.zip`);
+  fs.mkdirSync(path.dirname(zipPath), { recursive: true });
+
+  await progressLine(`Zipping cup files → ${path.basename(zipPath)}`, () => {
+    execFileSync('zip', ['-rq', zipPath, ...relPaths], { cwd: HOME_DIR, stdio: 'pipe' });
+  });
+
+  return zipPath;
+}
+
 export async function runBackup(opts: Opts = {}): Promise<void> {
   renderBanner();
 
   const providers = resolveProviders(opts.provider);
+  const type = opts.type || 'all';
+  if (type !== 'all' && type !== 'cup') {
+    console.error(`  ${style('ERROR:', C.red)} --type must be "all" or "cup"\n`);
+    process.exit(1);
+  }
 
   for (const provider of providers) {
+    if (type === 'cup') {
+      console.log(`  ${style(`Creating ${provider.displayName} cup backup...`, C.bold)}\n`);
+      const zipPath = await createCupBackup(provider, opts.output);
+      if (!zipPath) {
+        console.log(`  ${style('ℹ', C.cyan)} Nothing to back up — no cup-managed files found.\n`);
+        continue;
+      }
+      const size = fs.statSync(zipPath).size;
+      const sizeStr = size > 1048576 ? `${(size / 1048576).toFixed(1)} MB` : `${(size / 1024).toFixed(0)} KB`;
+      console.log(`\n  ${style('✓', C.green)} ${style('Cup backup created:', C.bold)} ${style(zipPath, C.cyan)}`);
+      console.log(`  ${style('Size:', C.gray)} ${sizeStr}\n`);
+      continue;
+    }
+
     const tarPath = opts.output || path.join(process.cwd(), `${provider.name}-backup-${timestamp()}.tar.gz`);
     console.log(`  ${style(`Creating ${provider.displayName} backup...`, C.bold)}\n`);
 
@@ -319,11 +448,44 @@ export async function runBackup(opts: Opts = {}): Promise<void> {
 
 export async function runRestore(source: string | undefined, opts: Opts = {}): Promise<void> {
   renderBanner();
+
+  const type = opts.type || 'all';
+  if (type !== 'all' && type !== 'cup') {
+    console.error(`  ${style('ERROR:', C.red)} --type must be "all" or "cup"\n`);
+    process.exit(1);
+  }
+
+  const provider = opts.provider ? resolveProviders(opts.provider)[0] : getProvider('claude');
+
+  if (type === 'cup') {
+    if (!source) {
+      const backupsDir = path.join(provider.homeDir, 'cup', 'backups');
+      if (!fs.existsSync(backupsDir)) {
+        console.error(`  ${style('ERROR:', C.red)} No cup backups directory: ${backupsDir}\n`);
+        process.exit(1);
+      }
+      const zips = fs.readdirSync(backupsDir).filter(f => f.endsWith('.zip')).sort();
+      if (zips.length === 0) {
+        console.error(`  ${style('ERROR:', C.red)} No .zip backups found in ${backupsDir}\n`);
+        process.exit(1);
+      }
+      source = path.join(backupsDir, zips[zips.length - 1]);
+      console.log(`  ${style('Using latest:', C.gray)} ${style(source, C.cyan)}\n`);
+    }
+    if (!fs.existsSync(source)) { console.error(`  ${style('ERROR:', C.red)} Not found: ${source}\n`); process.exit(1); }
+
+    if (!opts.force) { const b = provider.backupSettings(); if (b) console.log(`  ${style('💾', C.gray)} ${style('Safety backup: ' + b, C.gray)}\n`); }
+    console.log(`  ${style('Restoring cup backup...', C.bold)}\n`);
+    await progressLine('Extracting zip', () => {
+      execFileSync('unzip', ['-oq', path.resolve(source!), '-d', HOME_DIR], { stdio: 'pipe' });
+    });
+    console.log(`\n  ${style('✓', C.green)} ${style('Cup restore complete', C.bold)}\n`);
+    return;
+  }
+
   if (!source) { console.error(`  ${style('ERROR:', C.red)} Please specify a backup file or clone folder\n`); process.exit(1); }
   if (!fs.existsSync(source)) { console.error(`  ${style('ERROR:', C.red)} Not found: ${source}\n`); process.exit(1); }
 
-  // For restore, default to Claude provider (backward compat)
-  const provider = opts.provider ? resolveProviders(opts.provider)[0] : getProvider('claude');
   const stat = fs.statSync(source);
   if (!opts.force) { const b = provider.backupSettings(); if (b) console.log(`  ${style('💾', C.gray)} ${style('Backup: ' + b, C.gray)}\n`); }
 
@@ -803,5 +965,97 @@ export async function runUninstall(opts: Opts = {}): Promise<void> {
 
     console.log(`\n  ${style('✓', C.green)} ${style('Uninstall complete', C.bold)}`);
     console.log(`  ${style('Note:', C.gray)} ${provider.settingsFileName} and ~/${path.basename(provider.homeDir)}/ directory are preserved.\n`);
+  }
+}
+
+// --- Clean ---
+
+export async function runClean(opts: Opts = {}): Promise<void> {
+  renderBanner();
+
+  const providers = resolveProviders(opts.provider);
+
+  for (const provider of providers) {
+    if (providers.length > 1) {
+      console.log(`  ${style(`── ${provider.displayName} ──`, C.bold, C.cyan)}\n`);
+    } else {
+      console.log(`  ${style('Cleaning cup-managed files...', C.bold)}\n`);
+    }
+
+    const relPaths = getCupManagedRelPaths(provider);
+    if (relPaths.length === 0) {
+      console.log(`  ${style('ℹ', C.cyan)} Nothing to clean.\n`);
+      continue;
+    }
+
+    const repoSkills = getRepoSkillNames();
+    const cupSkills = provider.getInstalledSkills().filter(s => repoSkills.has(s));
+    const instrPath = provider.getInstructionFilePath('global');
+    const slPath = path.join(provider.homeDir, 'statusline-command.sh');
+    const settingsPath = path.join(provider.homeDir, provider.settingsFileName);
+
+    console.log(`  Will back up then remove:`);
+    console.log(`    • ${cupSkills.length} cup skills`);
+    if (fs.existsSync(settingsPath)) console.log(`    • ${provider.settingsFileName} — cup keys only`);
+    if (provider.hasStatusLine && fs.existsSync(slPath)) console.log(`    • statusline-command.sh`);
+    if (fs.existsSync(instrPath)) console.log(`    • ${provider.instructionFileName} — cup block only`);
+    console.log('');
+
+    if (!opts.yes && !(await ask('Proceed?', true))) {
+      console.log(`  ${style('Cancelled.', C.gray)}\n`);
+      continue;
+    }
+
+    let zipPath: string | null = null;
+    try {
+      zipPath = await createCupBackup(provider);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error(`\n  ${style('Backup failed:', C.red)} ${msg}`);
+      console.error(`  ${style('Aborted — nothing removed.', C.gray)}\n`);
+      continue;
+    }
+    if (zipPath) console.log(`\n  ${style('💾', C.gray)} ${style('Backup: ' + zipPath, C.gray)}\n`);
+
+    for (const name of cupSkills) {
+      fs.rmSync(path.join(provider.skillsDir, name), { recursive: true, force: true });
+    }
+    if (cupSkills.length > 0) console.log(`  ${style('✓', C.green)} ${cupSkills.length} cup skills removed`);
+
+    const block = provider.readCupBlock();
+    if (block && fs.existsSync(instrPath)) {
+      const content = fs.readFileSync(instrPath, 'utf-8');
+      const CUP_START = '<!-- <cup>';
+      const CUP_END = '<!-- </cup> -->';
+      const s = content.indexOf(CUP_START);
+      const e = content.indexOf(CUP_END);
+      if (s !== -1 && e !== -1) {
+        const cleaned = (content.slice(0, s) + content.slice(e + CUP_END.length)).replace(/\n{3,}/g, '\n\n').trim();
+        fs.writeFileSync(instrPath, cleaned + '\n');
+        console.log(`  ${style('✓', C.green)} ${provider.instructionFileName} — cup section removed`);
+      }
+    }
+
+    if (provider.hasStatusLine && fs.existsSync(slPath)) {
+      fs.unlinkSync(slPath);
+      console.log(`  ${style('✓', C.green)} Status line removed`);
+    }
+
+    const settings = provider.readSettings();
+    if (settings) {
+      let changed = false;
+      for (const key of ['permissions', 'enabledPlugins', 'extraKnownMarketplaces', 'statusLine']) {
+        if (settings[key] !== undefined) { delete settings[key]; changed = true; }
+      }
+      if (changed) {
+        provider.writeSettings(settings);
+        console.log(`  ${style('✓', C.green)} Cup keys cleared from ${provider.settingsFileName}`);
+      }
+    }
+
+    console.log(`\n  ${style('✓', C.green)} ${style('Clean complete', C.bold)}`);
+    if (zipPath) {
+      console.log(`  ${style('Restore with:', C.gray)} ${style(`cup restore --type=cup`, C.cyan)}\n`);
+    }
   }
 }

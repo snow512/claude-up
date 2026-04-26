@@ -22,13 +22,17 @@ Terminal              Claude Code session
 claude-up/
 ├── src/
 │   ├── cli.ts                  # CLI entry (arg parse + command routing)
-│   ├── installer.ts            # init/install/project-init/clone/backup/restore/status/doctor/update/sessions/resume/uninstall
+│   ├── installer.ts            # init/install/project-init/clone/backup/restore/clean/status/doctor/update/sessions/resume/uninstall
+│   ├── security.ts             # security init/check/diff (level: loose/normal/strict)
+│   ├── guidance.ts             # guidance init/list/remove (categories: language/scope/…)
+│   ├── library.ts              # library install/collect/list (whole-file sync with presets/library/)
+│   ├── md.ts                   # md <template> (drops e.g. DESIGN.md into cwd)
 │   ├── sync.ts                 # login/push/pull (GitHub Gist cloud sync)
 │   ├── ui.ts                   # Terminal UI (colors, banner, spinner, checkbox, ask)
 │   ├── utils.ts                # Shared utilities (readJson, writeJson, backup, parseSimpleYaml)
 │   └── providers/
 │       ├── types.ts            # Provider interface + shared types
-│       ├── base.ts             # Shared helpers (buildSkillContent, cup block I/O, session scan)
+│       ├── base.ts             # Shared helpers (buildSkillContent, generic marker-block I/O for cup/security/guidance, session scan)
 │       ├── registry.ts         # Auto-detection + --provider flag resolution
 │       ├── claude.ts           # ClaudeProvider (settings.json, CLAUDE.md, ~/.claude/skills/)
 │       ├── gemini.ts           # GeminiProvider (settings.json, policies TOML, GEMINI.md, ~/.gemini/skills/)
@@ -42,11 +46,13 @@ claude-up/
 │   ├── claude-md.md            # CLAUDE.md cup-managed block template
 │   ├── gemini-md.md            # GEMINI.md cup-managed block template
 │   ├── agents-md.md            # AGENTS.md cup-managed block template
+│   ├── library/                # Reference docs synced with ~/.claude/library/
+│   ├── md/                     # Markdown templates (DESIGN.md spec, etc.) — `cup md <name>`
 │   └── project/
 │       ├── claude.json         # .claude/settings.local.json
 │       ├── gemini.json         # .gemini/settings.json (project)
 │       └── codex.json          # .codex/config.toml (project)
-├── user-skills/                # 13 skills (en + ko + meta)
+├── user-skills/                # 15 skills (en + ko + meta)
 │   └── {name}/
 │       ├── SKILL.md            # English body (no frontmatter)
 │       ├── SKILL.ko.md         # Korean body (no frontmatter)
@@ -76,6 +82,8 @@ claude-up/
 | `enablePlugins()` | 플러그인/확장 활성화 |
 | `installSkill()` | meta + body 조합하여 스킬 설치 |
 | `readCupBlock()` / `writeCupBlock()` | 지침 파일(CLAUDE.md 등)의 cup 블록 관리 |
+| `applySecurityLevel()` / `read/write/removeSecurityBlock()` | 보안 레벨 적용 + cup-security 블록 관리 |
+| `read/write/removeGuidanceBlock(category)` / `listInstalledGuidance()` | 카테고리별 cup-guidance-* 블록 관리 |
 | `listSessions()` / `resumeSession()` | 세션 목록/재개 |
 | `getInitSteps()` | 프로바이더별 초기화 단계 정의 |
 | `getSyncKeys()` | 클라우드 싱크 대상 키 정의 |
@@ -173,6 +181,85 @@ presets/security/
    - Codex → `config.toml`의 `sandbox_mode` 갱신
 3. loose가 아닌 경우 `cup-security` 블록을 instruction file에 주입 (별도 마커 `<!-- <cup-security> -->`)
 4. `cup init` 실행 시 마지막 단계에서 `applySecurityToProvider` 자동 호출 (default: normal)
+
+## Guidance Categories
+
+`cup guidance` 는 LLM 응답 지침을 user instruction file 에 카테고리별 marker block 으로 주입한다. Security 와 동일한 pattern(별도 marker block, preset body, provider 공통 helper)이지만 **category 단위로 선택·설치·제거** 가능한 점이 다르다.
+
+| Category | 내용 |
+|----------|------|
+| `language` | Korean 베이스 + selective English 사용 규칙 |
+| `scope` | 요청 범위 확장 금지; observation vs instruction 구분 |
+| `design` | 구조적 문제 발생 시 patch 대신 redesign; explicit identity |
+| `deployment` | Production 배포 명시적 승인 |
+| `commit` | Conventional Commits + `Co-Authored-By` |
+
+### 파일 구조
+
+```
+presets/guidance/
+├── index.json           # categories metadata (id, title, description)
+├── language.md          # category body (no markers — markers added at install time)
+├── scope.md
+├── design.md
+├── deployment.md
+└── commit.md
+```
+
+### Marker
+
+각 카테고리는 설치 시 `<!-- <cup-guidance-<id>> -->` ... `<!-- </cup-guidance-<id>> -->` marker 로 감싸진다. Category id 는 `[a-z0-9_-]+` 패턴.
+
+### 작동 방식
+
+1. `cup guidance init --categories=<ids>` (혹은 interactive checkbox) → 각 카테고리의 preset body 를 읽어 marker 로 wrap, `Provider.writeGuidanceBlock(id, block)` 로 instruction file 에 insert/replace.
+2. `cup guidance list` → instruction file 을 스캔해 설치된 marker 의 id 를 추출(`listInstalledGuidance`), preset index 와 비교해 ✓/· 표시.
+3. `cup guidance remove --categories=<ids>` → `Provider.removeGuidanceBlock(id)` 로 marker block 만 삭제.
+4. `cup init` 마지막 step 에서 `applyGuidanceToProvider` 가 자동 호출 (default: 전체 카테고리, `--categories=` 로 제한 가능, interactive 모드에서는 checkbox 로 선택).
+
+### User 영역 확장
+
+User 가 직접 custom category 를 만들거나 `guidance-promote` skill 을 통해 project instruction file 의 rule 을 user 영역으로 승격할 수 있다. Preset 에 없는 id 는 `cup guidance list` 에서 `? <id> (unknown category)` 로 표시된다.
+
+## Library
+
+`cup library` 는 `presets/library/` 와 `~/.claude/library/` 사이에서 reference docs (design-guide, emoji rules, fix-issues guard 등) 를 file-단위로 양방향 sync 한다. Guidance 와 달리 marker-block merge 없이 file 통째로 copy.
+
+### Subcommands
+
+| Subcommand | 방향 | 동작 |
+|------------|------|------|
+| `install` | preset → user | 모든 preset file 을 user 디렉토리로 복사. 이미 존재하면서 다른 경우 `.bak.<ts>` backup 후 overwrite |
+| `collect` | user → preset | 역방향 — user 의 변경을 preset 으로 가져옴 (cup repo 소유자가 자기 customization 을 commit 하기 위해 사용) |
+| `list` | — | 양쪽 file 목록 + per-file 상태 (`= same` / `~ differ` / `+ preset only` / `+ user only`) |
+
+### 옵션
+
+- `--force/-f`: backup 생략 (덮어쓰기만)
+- `--yes/-y`: confirmation prompt 생략
+
+### Init 통합
+
+`cup init` 의 provider loop 가 끝난 직후 (renderDone 직전) library 도 자동 install. `--yes` 면 prompt 없이 진행, interactive 면 한 번 confirm.
+
+## Markdown Templates
+
+`cup md` 는 project-level markdown 표준 file (DESIGN.md 등) 을 cwd 에 drop 하는 generator. Library 와 다르게:
+
+- **Source**: `presets/md/<template>.md`
+- **Default destination**: `./<TEMPLATE>.md` (cwd, uppercase 변환)
+- **Override**: `--output=<path>`
+- 기존 file 있으면 prompt + `.bak.<ts>` backup (`--force` 로 skip)
+
+### 현재 templates
+
+| Template | 출력 file | 표준 |
+|----------|-----------|------|
+| `design` | `DESIGN.md` | [Stitch DESIGN.md](https://github.com/google-labs-code/design.md) — YAML frontmatter (colors/typography/spacing/components) + canonical sections (Overview/Colors/Typography/Layout/Elevation/Shapes/Components/Do's & Don'ts) |
+
+### Init 통합
+
+`cup init` 의 마지막 단계에서 모든 `presets/md/*` 를 `~/.claude/library/md/` 로 install. 이건 user-level reference store — 실제 project 에 drop 할 때는 별도로 `cup md design` 실행.
 
 ## Dependencies
 

@@ -5,6 +5,9 @@ const installer_1 = require("./installer");
 const ui_1 = require("./ui");
 const sync_1 = require("./sync");
 const security_1 = require("./security");
+const guidance_1 = require("./guidance");
+const library_1 = require("./library");
+const md_1 = require("./md");
 // --- Parse args ---
 const args = process.argv.slice(2);
 const flags = new Set(args.filter(a => a.startsWith('-') && !a.includes('=')));
@@ -29,6 +32,8 @@ const opts = {
     limit: parseInt(getFlag('limit') || '10', 10),
     provider: getFlag('provider') || undefined,
     level: getFlag('level') || undefined,
+    type: getFlag('type') || undefined,
+    categories: getFlag('categories') || undefined,
 };
 // --- Help ---
 function showHelp() {
@@ -69,10 +74,14 @@ function showHelp() {
     console.log(`  ${(0, ui_1.style)('Environment', b)}`);
     console.log(`    ${(0, ui_1.style)('clone', c)}             Export ~/.claude/ as portable package`);
     console.log(`      ${(0, ui_1.style)('--output=<dir>', g)}  Output directory`);
-    console.log(`    ${(0, ui_1.style)('backup', c)}            Snapshot ~/.claude/ to .tar.gz`);
+    console.log(`    ${(0, ui_1.style)('backup', c)}            Snapshot environment to archive`);
+    console.log(`      ${(0, ui_1.style)('--type=<all|cup>', g)} all = full .tar.gz (default); cup = zip of cup files`);
     console.log(`      ${(0, ui_1.style)('--output=<file>', g)} Output file path`);
-    console.log(`    ${(0, ui_1.style)('restore', c)} <file>    Restore from backup`);
+    console.log(`    ${(0, ui_1.style)('restore', c)} [file]    Restore from backup`);
+    console.log(`      ${(0, ui_1.style)('--type=<all|cup>', g)} all (default) = tar.gz/folder; cup = zip (auto-picks latest)`);
     console.log(`      ${(0, ui_1.style)('--force, -f', g)}     Skip backup of current settings`);
+    console.log(`    ${(0, ui_1.style)('clean', c)}             Back up (cup) then remove cup-managed files`);
+    console.log(`      ${(0, ui_1.style)('--yes, -y', g)}       Skip confirmation`);
     console.log(`    ${(0, ui_1.style)('uninstall', c)}         Remove claude-up (skills, settings, CLAUDE.md)`);
     console.log(`      ${(0, ui_1.style)('--yes, -y', g)}       Remove everything without asking\n`);
     console.log(`  ${(0, ui_1.style)('Sync', b)}`);
@@ -89,6 +98,28 @@ function showHelp() {
     console.log(`    ${(0, ui_1.style)('security check', c)}    Audit current security posture`);
     console.log(`    ${(0, ui_1.style)('security diff', c)}     Compare current vs target level`);
     console.log(`      ${(0, ui_1.style)('--level=<level>', g)} Target level to compare against\n`);
+    console.log(`  ${(0, ui_1.style)('Guidance', b)}`);
+    console.log(`    ${(0, ui_1.style)('guidance', c)}          Show guidance subcommand help`);
+    console.log(`    ${(0, ui_1.style)('guidance init', c)}     Install instruction categories (language, scope, …)`);
+    console.log(`      ${(0, ui_1.style)('--categories=<list>', g)} comma-separated ids (default: interactive checkbox)`);
+    console.log(`      ${(0, ui_1.style)('--yes, -y', g)}       Apply all without prompting`);
+    console.log(`    ${(0, ui_1.style)('guidance list', c)}     Show available + installed guidance categories`);
+    console.log(`    ${(0, ui_1.style)('guidance remove', c)}   Uninstall guidance categories`);
+    console.log(`      ${(0, ui_1.style)('--categories=<list>', g)} comma-separated ids to remove\n`);
+    console.log(`  ${(0, ui_1.style)('Library', b)}`);
+    console.log(`    ${(0, ui_1.style)('library', c)}           Show library subcommand help`);
+    console.log(`    ${(0, ui_1.style)('library install', c)}   Copy preset library files → ~/.claude/library/`);
+    console.log(`    ${(0, ui_1.style)('library collect', c)}   Copy ~/.claude/library/ → preset library files`);
+    console.log(`      ${(0, ui_1.style)('--force, -f', g)}     Overwrite without backup`);
+    console.log(`      ${(0, ui_1.style)('--yes, -y', g)}       Skip confirmation`);
+    console.log(`    ${(0, ui_1.style)('library list', c)}      Show library file inventory + diff status\n`);
+    console.log(`  ${(0, ui_1.style)('Markdown Templates', b)}`);
+    console.log(`    ${(0, ui_1.style)('md', c)}                Show md subcommand help`);
+    console.log(`    ${(0, ui_1.style)('md <template>', c)}     Drop a template into cwd (e.g. ${(0, ui_1.style)('cup md design', c)} → ./DESIGN.md)`);
+    console.log(`      ${(0, ui_1.style)('--output=<path>', g)} Custom destination`);
+    console.log(`      ${(0, ui_1.style)('--force, -f', g)}     Overwrite without backup`);
+    console.log(`      ${(0, ui_1.style)('--yes, -y', g)}       Skip confirmation`);
+    console.log(`    ${(0, ui_1.style)('md list', c)}           Show available templates\n`);
     console.log(`  ${(0, ui_1.style)('Global Options', b)}`);
     console.log(`    ${(0, ui_1.style)('--provider=<name>', c)}  Target provider (claude,gemini,codex; auto-detect if omitted)`);
     console.log(`    ${(0, ui_1.style)('--help, -h', c)}        Show this help message`);
@@ -138,6 +169,9 @@ async function dispatch() {
         case 'uninstall':
             await (0, installer_1.runUninstall)(opts);
             break;
+        case 'clean':
+            await (0, installer_1.runClean)(opts);
+            break;
         case 'login':
             await (0, sync_1.runLogin)(opts);
             break;
@@ -149,6 +183,15 @@ async function dispatch() {
             break;
         case 'security':
             await (0, security_1.runSecurity)(subcommand, opts);
+            break;
+        case 'guidance':
+            await (0, guidance_1.runGuidance)(subcommand, opts);
+            break;
+        case 'library':
+            await (0, library_1.runLibrary)(subcommand, opts);
+            break;
+        case 'md':
+            await (0, md_1.runMd)(subcommand, opts);
             break;
         case '--version':
             showVersion();
