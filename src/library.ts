@@ -1,28 +1,14 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { renderBanner, ask, C, style } from './ui';
-import { PACKAGE_ROOT, HOME_DIR, backup } from './utils';
+import { PACKAGE_ROOT, HOME_DIR, syncDirectory } from './utils';
+import type { SyncCounts, SyncResult } from './utils';
 import type { Opts } from './installer';
 
 // --- Paths ---
 
 const PRESET_DIR = path.join(PACKAGE_ROOT, 'presets', 'library');
 const USER_DIR = path.join(HOME_DIR, '.claude', 'library');
-
-// --- Types ---
-
-type CopyResult = 'created' | 'updated' | 'unchanged';
-
-export interface LibrarySyncCounts {
-  created: number;
-  updated: number;
-  unchanged: number;
-}
-
-interface SyncOutcome {
-  counts: LibrarySyncCounts;
-  reports: Array<{ file: string; result: CopyResult }>;
-}
 
 // --- Helpers ---
 
@@ -36,32 +22,7 @@ function sameContent(a: string, b: string): boolean {
   catch { return false; }
 }
 
-function copyFile(src: string, dest: string, force: boolean): CopyResult {
-  fs.mkdirSync(path.dirname(dest), { recursive: true });
-  if (!fs.existsSync(dest)) {
-    fs.copyFileSync(src, dest);
-    return 'created';
-  }
-  if (sameContent(src, dest)) return 'unchanged';
-  if (!force) backup(dest);
-  fs.copyFileSync(src, dest);
-  return 'updated';
-}
-
-function syncDir(srcDir: string, dstDir: string, force: boolean): SyncOutcome {
-  const files = listFiles(srcDir);
-  fs.mkdirSync(dstDir, { recursive: true });
-  const counts: LibrarySyncCounts = { created: 0, updated: 0, unchanged: 0 };
-  const reports: SyncOutcome['reports'] = [];
-  for (const f of files) {
-    const result = copyFile(path.join(srcDir, f), path.join(dstDir, f), force);
-    counts[result]++;
-    reports.push({ file: f, result });
-  }
-  return { counts, reports };
-}
-
-function tagFor(result: CopyResult): string {
+function tagFor(result: SyncResult): string {
   if (result === 'created') return style('+', C.green);
   if (result === 'updated') return style('~', C.yellow);
   return style('=', C.gray);
@@ -69,7 +30,7 @@ function tagFor(result: CopyResult): string {
 
 // --- Programmatic API (used by cup init) ---
 
-export async function installPresetLibrary(opts: { yes?: boolean; force?: boolean }): Promise<LibrarySyncCounts | null> {
+export async function installPresetLibrary(opts: { yes?: boolean; force?: boolean }): Promise<SyncCounts | null> {
   const files = listFiles(PRESET_DIR);
   if (files.length === 0) return null;
 
@@ -78,7 +39,7 @@ export async function installPresetLibrary(opts: { yes?: boolean; force?: boolea
     if (!ok) return null;
   }
 
-  return syncDir(PRESET_DIR, USER_DIR, opts.force ?? false).counts;
+  return syncDirectory(PRESET_DIR, USER_DIR, opts.force ?? false).counts;
 }
 
 // --- Help ---
@@ -133,7 +94,7 @@ async function runSync(opts: Opts, direction: 'install' | 'collect'): Promise<vo
     if (!ok) { console.log(`  ${style('Aborted.', C.gray)}\n`); return; }
   }
 
-  const { counts, reports } = syncDir(srcDir, dstDir, opts.force ?? false);
+  const { counts, reports } = syncDirectory(srcDir, dstDir, opts.force ?? false);
   for (const r of reports) {
     console.log(`  ${tagFor(r.result)} ${r.file} ${style(r.result, C.gray)}`);
   }

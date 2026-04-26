@@ -9,6 +9,7 @@ import { resolveProviders, getProvider } from './providers/registry';
 import type { Provider, SecurityLevelConfig } from './providers/types';
 import { applyGuidanceCategories, getGuidanceCategories, parseCategories as parseGuidanceCategories, InvalidCategoriesError } from './guidance';
 import { installPresetLibrary } from './library';
+import { installMdTemplates } from './md';
 
 // --- Types ---
 
@@ -111,6 +112,7 @@ export async function runInit(opts: Opts = {}): Promise<void> {
   }
 
   await installLibraryDuringInit(useDefaults, opts.force ?? false);
+  installMdDuringInit(opts.force ?? false);
 
   renderDone(providers.map(p => p.name));
 }
@@ -119,6 +121,12 @@ async function installLibraryDuringInit(useDefaults: boolean, force: boolean): P
   const counts = await installPresetLibrary({ yes: useDefaults, force });
   if (!counts) return;
   console.log(`\n  ${style('📚', C.gray)} ${style(`Library: ${counts.created} created, ${counts.updated} updated, ${counts.unchanged} unchanged`, C.gray)}`);
+}
+
+function installMdDuringInit(force: boolean): void {
+  const counts = installMdTemplates({ force });
+  if (!counts) return;
+  console.log(`  ${style('📝', C.gray)} ${style(`MD templates: ${counts.created} created, ${counts.updated} updated, ${counts.unchanged} unchanged`, C.gray)}`);
 }
 
 function applySecurityToProvider(provider: Provider, level: string): SummaryResult {

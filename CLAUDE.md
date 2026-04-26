@@ -98,6 +98,9 @@ cup library                                 # Library subcommand help
 cup library install                         # Copy preset library → ~/.claude/library/
 cup library collect                         # Copy ~/.claude/library/ → preset library
 cup library list                            # Show library file inventory + diff
+cup md                                      # MD template subcommand help
+cup md <template>                           # Drop e.g. ./DESIGN.md into cwd
+cup md list                                 # List available templates
 ```
 
 Alias: `claude-up` = `cup`

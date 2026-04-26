@@ -7,6 +7,7 @@ const sync_1 = require("./sync");
 const security_1 = require("./security");
 const guidance_1 = require("./guidance");
 const library_1 = require("./library");
+const md_1 = require("./md");
 // --- Parse args ---
 const args = process.argv.slice(2);
 const flags = new Set(args.filter(a => a.startsWith('-') && !a.includes('=')));
@@ -112,6 +113,13 @@ function showHelp() {
     console.log(`      ${(0, ui_1.style)('--force, -f', g)}     Overwrite without backup`);
     console.log(`      ${(0, ui_1.style)('--yes, -y', g)}       Skip confirmation`);
     console.log(`    ${(0, ui_1.style)('library list', c)}      Show library file inventory + diff status\n`);
+    console.log(`  ${(0, ui_1.style)('Markdown Templates', b)}`);
+    console.log(`    ${(0, ui_1.style)('md', c)}                Show md subcommand help`);
+    console.log(`    ${(0, ui_1.style)('md <template>', c)}     Drop a template into cwd (e.g. ${(0, ui_1.style)('cup md design', c)} → ./DESIGN.md)`);
+    console.log(`      ${(0, ui_1.style)('--output=<path>', g)} Custom destination`);
+    console.log(`      ${(0, ui_1.style)('--force, -f', g)}     Overwrite without backup`);
+    console.log(`      ${(0, ui_1.style)('--yes, -y', g)}       Skip confirmation`);
+    console.log(`    ${(0, ui_1.style)('md list', c)}           Show available templates\n`);
     console.log(`  ${(0, ui_1.style)('Global Options', b)}`);
     console.log(`    ${(0, ui_1.style)('--provider=<name>', c)}  Target provider (claude,gemini,codex; auto-detect if omitted)`);
     console.log(`    ${(0, ui_1.style)('--help, -h', c)}        Show this help message`);
@@ -181,6 +189,9 @@ async function dispatch() {
             break;
         case 'library':
             await (0, library_1.runLibrary)(subcommand, opts);
+            break;
+        case 'md':
+            await (0, md_1.runMd)(subcommand, opts);
             break;
         case '--version':
             showVersion();

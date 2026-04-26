@@ -26,6 +26,7 @@ claude-up/
 │   ├── security.ts             # security init/check/diff (level: loose/normal/strict)
 │   ├── guidance.ts             # guidance init/list/remove (categories: language/scope/…)
 │   ├── library.ts              # library install/collect/list (whole-file sync with presets/library/)
+│   ├── md.ts                   # md <template> (drops e.g. DESIGN.md into cwd)
 │   ├── sync.ts                 # login/push/pull (GitHub Gist cloud sync)
 │   ├── ui.ts                   # Terminal UI (colors, banner, spinner, checkbox, ask)
 │   ├── utils.ts                # Shared utilities (readJson, writeJson, backup, parseSimpleYaml)
@@ -46,6 +47,7 @@ claude-up/
 │   ├── gemini-md.md            # GEMINI.md cup-managed block template
 │   ├── agents-md.md            # AGENTS.md cup-managed block template
 │   ├── library/                # Reference docs synced with ~/.claude/library/
+│   ├── md/                     # Markdown templates (DESIGN.md spec, etc.) — `cup md <name>`
 │   └── project/
 │       ├── claude.json         # .claude/settings.local.json
 │       ├── gemini.json         # .gemini/settings.json (project)
@@ -239,6 +241,25 @@ User 가 직접 custom category 를 만들거나 `guidance-promote` skill 을 �
 ### Init 통합
 
 `cup init` 의 provider loop 가 끝난 직후 (renderDone 직전) library 도 자동 install. `--yes` 면 prompt 없이 진행, interactive 면 한 번 confirm.
+
+## Markdown Templates
+
+`cup md` 는 project-level markdown 표준 file (DESIGN.md 등) 을 cwd 에 drop 하는 generator. Library 와 다르게:
+
+- **Source**: `presets/md/<template>.md`
+- **Default destination**: `./<TEMPLATE>.md` (cwd, uppercase 변환)
+- **Override**: `--output=<path>`
+- 기존 file 있으면 prompt + `.bak.<ts>` backup (`--force` 로 skip)
+
+### 현재 templates
+
+| Template | 출력 file | 표준 |
+|----------|-----------|------|
+| `design` | `DESIGN.md` | [Stitch DESIGN.md](https://github.com/google-labs-code/design.md) — YAML frontmatter (colors/typography/spacing/components) + canonical sections (Overview/Colors/Typography/Layout/Elevation/Shapes/Components/Do's & Don'ts) |
+
+### Init 통합
+
+`cup init` 의 마지막 단계에서 모든 `presets/md/*` 를 `~/.claude/library/md/` 로 install. 이건 user-level reference store — 실제 project 에 drop 할 때는 별도로 `cup md design` 실행.
 
 ## Dependencies
 

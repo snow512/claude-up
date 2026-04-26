@@ -62,6 +62,7 @@ Object.defineProperty(exports, "PACKAGE_ROOT", { enumerable: true, get: function
 const registry_1 = require("./providers/registry");
 const guidance_1 = require("./guidance");
 const library_1 = require("./library");
+const md_1 = require("./md");
 // --- Backward compat exports (used by sync.ts) ---
 exports.CLAUDE_DIR = path.join(utils_1.HOME_DIR, '.claude');
 // --- Main: init ---
@@ -125,6 +126,7 @@ async function runInit(opts = {}) {
         (0, ui_1.renderSummary)(results);
     }
     await installLibraryDuringInit(useDefaults, opts.force ?? false);
+    installMdDuringInit(opts.force ?? false);
     (0, ui_1.renderDone)(providers.map(p => p.name));
 }
 async function installLibraryDuringInit(useDefaults, force) {
@@ -132,6 +134,12 @@ async function installLibraryDuringInit(useDefaults, force) {
     if (!counts)
         return;
     console.log(`\n  ${(0, ui_1.style)('📚', ui_1.C.gray)} ${(0, ui_1.style)(`Library: ${counts.created} created, ${counts.updated} updated, ${counts.unchanged} unchanged`, ui_1.C.gray)}`);
+}
+function installMdDuringInit(force) {
+    const counts = (0, md_1.installMdTemplates)({ force });
+    if (!counts)
+        return;
+    console.log(`  ${(0, ui_1.style)('📝', ui_1.C.gray)} ${(0, ui_1.style)(`MD templates: ${counts.created} created, ${counts.updated} updated, ${counts.unchanged} unchanged`, ui_1.C.gray)}`);
 }
 function applySecurityToProvider(provider, level) {
     const validLevels = ['loose', 'normal', 'strict'];

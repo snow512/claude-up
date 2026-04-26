@@ -73,6 +73,58 @@ export function backup(filePath: string): string | null {
   } catch { return null; }
 }
 
+// --- Directory mirror (file-level sync with backup) ---
+
+export type SyncResult = 'created' | 'updated' | 'unchanged';
+export interface SyncCounts { created: number; updated: number; unchanged: number; }
+export interface SyncOutcome {
+  counts: SyncCounts;
+  reports: Array<{ file: string; result: SyncResult }>;
+}
+
+/**
+ * Mirror flat-file contents from srcDir to dstDir.
+ * Skips dot-prefixed files; optional fileFilter narrows further (e.g., extension match).
+ * For each file: creates if missing, copies if changed (with .bak.<ts> backup unless force), else unchanged.
+ */
+export function syncDirectory(
+  srcDir: string,
+  dstDir: string,
+  force: boolean,
+  fileFilter?: (name: string) => boolean,
+): SyncOutcome {
+  const empty: SyncOutcome = { counts: { created: 0, updated: 0, unchanged: 0 }, reports: [] };
+
+  let files: string[];
+  try {
+    files = fs.readdirSync(srcDir).filter(f => !f.startsWith('.'));
+    if (fileFilter) files = files.filter(fileFilter);
+    files.sort();
+  } catch { return empty; }
+
+  fs.mkdirSync(dstDir, { recursive: true });
+  const outcome: SyncOutcome = { counts: { created: 0, updated: 0, unchanged: 0 }, reports: [] };
+
+  for (const f of files) {
+    const src = path.join(srcDir, f);
+    const dst = path.join(dstDir, f);
+    let result: SyncResult;
+    if (!fs.existsSync(dst)) {
+      fs.copyFileSync(src, dst);
+      result = 'created';
+    } else if (fs.readFileSync(src).equals(fs.readFileSync(dst))) {
+      result = 'unchanged';
+    } else {
+      if (!force) backup(dst);
+      fs.copyFileSync(src, dst);
+      result = 'updated';
+    }
+    outcome.counts[result]++;
+    outcome.reports.push({ file: f, result });
+  }
+  return outcome;
+}
+
 // --- Simple YAML parser (key-value + multiline, no nested objects) ---
 
 export function parseSimpleYaml(content: string): Record<string, string> {

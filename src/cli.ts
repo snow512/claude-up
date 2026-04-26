@@ -7,6 +7,7 @@ import { runLogin, runPush, runPull } from './sync';
 import { runSecurity } from './security';
 import { runGuidance } from './guidance';
 import { runLibrary } from './library';
+import { runMd } from './md';
 
 // --- Parse args ---
 
@@ -129,6 +130,14 @@ function showHelp(): void {
   console.log(`      ${style('--yes, -y', g)}       Skip confirmation`);
   console.log(`    ${style('library list', c)}      Show library file inventory + diff status\n`);
 
+  console.log(`  ${style('Markdown Templates', b)}`);
+  console.log(`    ${style('md', c)}                Show md subcommand help`);
+  console.log(`    ${style('md <template>', c)}     Drop a template into cwd (e.g. ${style('cup md design', c)} → ./DESIGN.md)`);
+  console.log(`      ${style('--output=<path>', g)} Custom destination`);
+  console.log(`      ${style('--force, -f', g)}     Overwrite without backup`);
+  console.log(`      ${style('--yes, -y', g)}       Skip confirmation`);
+  console.log(`    ${style('md list', c)}           Show available templates\n`);
+
   console.log(`  ${style('Global Options', b)}`);
   console.log(`    ${style('--provider=<name>', c)}  Target provider (claude,gemini,codex; auto-detect if omitted)`);
   console.log(`    ${style('--help, -h', c)}        Show this help message`);
@@ -165,6 +174,7 @@ async function dispatch(): Promise<void> {
     case 'security':     await runSecurity(subcommand, opts); break;
     case 'guidance':     await runGuidance(subcommand, opts); break;
     case 'library':      await runLibrary(subcommand, opts); break;
+    case 'md':           await runMd(subcommand, opts); break;
     case '--version':    showVersion(); break;
     case '--help': case '-h': case undefined:
       showHelp(); break;

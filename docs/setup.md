@@ -92,6 +92,11 @@ cup library                                            # Show library help
 cup library install [--force] [--yes]                  # presets/library/* → ~/.claude/library/
 cup library collect [--force] [--yes]                  # ~/.claude/library/* → presets/library/
 cup library list                                       # Show file inventory + diff
+
+# Markdown Templates  (auto-installed at end of `cup init` to ~/.claude/library/md/)
+cup md                                                 # Show md help + available templates
+cup md <template> [--output=<path>] [--force] [--yes]  # Drop e.g. ./DESIGN.md into cwd
+cup md list                                            # List available templates
 ```
 
 ## Security Levels

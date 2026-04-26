@@ -61,31 +61,6 @@ function sameContent(a, b) {
         return false;
     }
 }
-function copyFile(src, dest, force) {
-    fs.mkdirSync(path.dirname(dest), { recursive: true });
-    if (!fs.existsSync(dest)) {
-        fs.copyFileSync(src, dest);
-        return 'created';
-    }
-    if (sameContent(src, dest))
-        return 'unchanged';
-    if (!force)
-        (0, utils_1.backup)(dest);
-    fs.copyFileSync(src, dest);
-    return 'updated';
-}
-function syncDir(srcDir, dstDir, force) {
-    const files = listFiles(srcDir);
-    fs.mkdirSync(dstDir, { recursive: true });
-    const counts = { created: 0, updated: 0, unchanged: 0 };
-    const reports = [];
-    for (const f of files) {
-        const result = copyFile(path.join(srcDir, f), path.join(dstDir, f), force);
-        counts[result]++;
-        reports.push({ file: f, result });
-    }
-    return { counts, reports };
-}
 function tagFor(result) {
     if (result === 'created')
         return (0, ui_1.style)('+', ui_1.C.green);
@@ -103,7 +78,7 @@ async function installPresetLibrary(opts) {
         if (!ok)
             return null;
     }
-    return syncDir(PRESET_DIR, USER_DIR, opts.force ?? false).counts;
+    return (0, utils_1.syncDirectory)(PRESET_DIR, USER_DIR, opts.force ?? false).counts;
 }
 // --- Help ---
 function showLibraryHelp() {
@@ -149,7 +124,7 @@ async function runSync(opts, direction) {
             return;
         }
     }
-    const { counts, reports } = syncDir(srcDir, dstDir, opts.force ?? false);
+    const { counts, reports } = (0, utils_1.syncDirectory)(srcDir, dstDir, opts.force ?? false);
     for (const r of reports) {
         console.log(`  ${tagFor(r.result)} ${r.file} ${(0, ui_1.style)(r.result, ui_1.C.gray)}`);
     }
